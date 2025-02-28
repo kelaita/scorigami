@@ -1,0 +1,12 @@
+{
+  "data" : [
+    {
+      "filename" : "scorigami_dummy_data_base64.txt",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

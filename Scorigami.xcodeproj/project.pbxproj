@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		DA0FB3B1290EE09E00014FCE /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA0FB3B0290EE09E00014FCE /* AboutView.swift */; };
+		DA5B30B129D2AB46009FA0EC /* scorigami_dummy_data_base64.txt in Resources */ = {isa = PBXBuildFile; fileRef = DA5B30B029D2AB46009FA0EC /* scorigami_dummy_data_base64.txt */; };
 		DA80A77A2900A33100982476 /* ScorigamiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA80A7792900A33100982476 /* ScorigamiApp.swift */; };
 		DA80A77C2900A33100982476 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA80A77B2900A33100982476 /* ContentView.swift */; };
 		DA80A77E2900A33300982476 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DA80A77D2900A33300982476 /* Assets.xcassets */; };
@@ -45,6 +46,7 @@
 
 /* Begin PBXFileReference section */
 		DA0FB3B0290EE09E00014FCE /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		DA5B30B029D2AB46009FA0EC /* scorigami_dummy_data_base64.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = scorigami_dummy_data_base64.txt; sourceTree = "<group>"; };
 		DA80A7762900A33100982476 /* Scorigami.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Scorigami.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA80A7792900A33100982476 /* ScorigamiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScorigamiApp.swift; sourceTree = "<group>"; };
 		DA80A77B2900A33100982476 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -116,6 +118,7 @@
 			isa = PBXGroup;
 			children = (
 				DAA81193291486E100F60D0D /* Info.plist */,
+				DA5B30B029D2AB46009FA0EC /* scorigami_dummy_data_base64.txt */,
 				DAC9AA572923EEE0003C5678 /* Models */,
 				DAC9AA552923EEAF003C5678 /* Views */,
 				DAC9AA562923EEC3003C5678 /* ViewModels */,
@@ -300,6 +303,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA5B30B129D2AB46009FA0EC /* scorigami_dummy_data_base64.txt in Resources */,
 				DA80A7812900A33300982476 /* Preview Assets.xcassets in Resources */,
 				DA80A77E2900A33300982476 /* Assets.xcassets in Resources */,
 			);

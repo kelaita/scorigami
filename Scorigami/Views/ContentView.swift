@@ -20,14 +20,8 @@ struct ContentView: View {
     }
     VStack {
       NavOptions().environmentObject(viewModel)
-      if (viewModel.zoomView) {
-        InteractiveView()
-          .environmentObject(viewModel)
-      } else {
-        OverallView()
-          .transition(.scale)
-          .environmentObject(viewModel)
-      }
+      InteractiveView()
+        .environmentObject(viewModel)
       Spacer()
       UIOptions().environmentObject(viewModel)
     }.navigationBarTitleDisplayMode(.inline)
@@ -151,7 +145,7 @@ struct GradientLegend: View {
             .foregroundColor(.white)
           Image(systemName: viewModel.colorMapType == .fullSpectrum ?
                 "checkmark.square": "square")
-            .foregroundColor(.white)
+          .foregroundColor(.white)
         }
       }.frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.trailing, 2)

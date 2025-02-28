@@ -50,12 +50,16 @@ struct Scorigami {
     // grab the web page that has a list of all scores that have occured;
     // we will pass the raw HTML to a parsing function
     //
-    let url = URL(string: allGamesURL)!
-    let (data, _, _) = URLSession.shared.synchronousDataTask(with: url)
-    guard let data = data else { return }
-    parseAllScores(html: String(data: data, encoding: .utf8)!)
+    let filepath = Bundle.main.path(forResource: "scorigami_dummy_data_base64", ofType: "txt")
+    do {
+      let contents = try String(contentsOfFile: filepath!)
+      let data = Data(base64Encoded: contents)
+      parseAllScores(html: String(data: data!, encoding: .utf8)!)
+    } catch {
+      // contents could not be loaded
+    }
   }
-  
+
   mutating func parseAllScores(html: String) {
     do {
       // let's use SwiftSoup to pull just the interesting table out

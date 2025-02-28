@@ -9,6 +9,8 @@ import SwiftUI
 
 struct InteractiveView: View {
   @EnvironmentObject var viewModel: ScorigamiViewModel
+  @State private var currentAmount = 0.0
+  @State private var finalAmount = 1.0
   
   var body: some View {
     ScrollViewReader { reader in
@@ -19,13 +21,20 @@ struct InteractiveView: View {
               ScoreCells(losingScore: losingScore)
             }
           }
-        }
+        }.scaleEffect(finalAmount + currentAmount)
+          .highPriorityGesture (
+              MagnificationGesture()
+                  .onChanged { amount in
+                      currentAmount = amount - 1
+                  }
+                  .onEnded { amount in
+                      finalAmount += currentAmount
+                      currentAmount = 0
+                  }
+          )
       }
       .border(.black, width: 4)
       .preferredColorScheme(.dark)
-      .onAppear {
-        reader.scrollTo(viewModel.scrollToCell, anchor: .center)
-      }
     }
   }
 }
