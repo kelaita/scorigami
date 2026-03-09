@@ -10,12 +10,7 @@ import SwiftUI
 struct OverallView: View {
   @EnvironmentObject var viewModel: ScorigamiViewModel
 
-  @State private var showingAlert: Bool = false
-  @State private var score: String = ""
-  @State private var occurrences: Int = 0
-  @State private var gamesUrl: String = ""
-  @State private var lastGame: String = ""
-  @State private var plural: String = ""
+  @State private var selectedScore: ScoreDetails?
 
   @State private var zoomScale: CGFloat = 1.0
   @State private var lastZoomScale: CGFloat = 1.0
@@ -100,24 +95,11 @@ struct OverallView: View {
       }
       .background(.black)
     }
-    .alert("Game Score: " + score, isPresented: $showingAlert, actions: {
-      if occurrences > 0 {
-        Button("Done", role: .cancel, action: {})
-        Link("View games", destination: URL(string: gamesUrl)!)
-      }
-    }, message: {
-      if occurrences > 0 {
-        Text("\nA game has ended with this score\n") +
-        Text(String(occurrences)) +
-        Text(" time") +
-        Text(plural) +
-        Text(".\n\nMost recently, this happened when the\n") +
-        Text(lastGame)
-      } else {
-        Text("\nSCORIGAMI!\n\n") +
-        Text("No game has ever ended\nwith this score...yet!")
-      }
-    })
+    .sheet(item: $selectedScore) { details in
+      GameScoreSheet(details: details)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
   }
 
   private func dragGesture(boardWidth: CGFloat,
@@ -204,12 +186,67 @@ struct OverallView: View {
   }
 
   private func showScoreDetails(cell: ScorigamiViewModel.Cell) {
+    selectedScore = ScoreDetails(cell: cell)
+  }
+}
+
+struct ScoreDetails: Identifiable {
+  let id = UUID()
+  let score: String
+  let occurrences: Int
+  let gamesUrl: String
+  let lastGame: String
+  let plural: String
+
+  init(cell: ScorigamiViewModel.Cell) {
     score = cell.label
     occurrences = cell.occurrences
     gamesUrl = cell.gamesUrl
     lastGame = cell.lastGame
     plural = cell.plural
-    showingAlert = true
+  }
+}
+
+struct GameScoreSheet: View {
+  let details: ScoreDetails
+  @Environment(\.dismiss) private var dismiss
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      Text(details.score)
+        .font(.system(size: 30, weight: .bold))
+        .frame(maxWidth: .infinity, alignment: .center)
+      if details.occurrences > 0 {
+        Text("This score has happened \(details.occurrences) time\(details.plural).")
+          .font(.system(size: 17, weight: .semibold))
+        Text("Most recent game:")
+          .font(.system(size: 14))
+          .foregroundColor(.secondary)
+        Text(details.lastGame)
+          .font(.system(size: 16))
+        if let url = URL(string: details.gamesUrl), !details.gamesUrl.isEmpty {
+          Link(destination: url) {
+            Text("View games")
+              .frame(maxWidth: .infinity)
+          }
+          .buttonStyle(.borderedProminent)
+          .padding(.top, 6)
+        }
+      } else {
+        Text("SCORIGAMI!")
+          .font(.system(size: 22, weight: .heavy))
+          .foregroundColor(.orange)
+        Text("No game has ever ended with this score...yet.")
+          .font(.system(size: 17, weight: .semibold))
+      }
+      Spacer(minLength: 0)
+      Button("Done") {
+        dismiss()
+      }
+      .frame(maxWidth: .infinity)
+      .buttonStyle(.bordered)
+    }
+    .padding(20)
   }
 }
 
