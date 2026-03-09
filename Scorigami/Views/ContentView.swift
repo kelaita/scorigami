@@ -18,26 +18,26 @@ struct ContentView: View {
       //
       NetworkFailureExitView()
     }
-    VStack {
-      NavOptions().environmentObject(viewModel)
-      if (viewModel.zoomView) {
-        InteractiveView()
-          .environmentObject(viewModel)
-      } else {
+    ZStack {
+      Color.black.ignoresSafeArea()
+      VStack(spacing: 0) {
+        NavOptions().environmentObject(viewModel)
         OverallView()
           .transition(.scale)
           .environmentObject(viewModel)
+        Spacer()
+        UIOptions().environmentObject(viewModel)
       }
-      Spacer()
-      UIOptions().environmentObject(viewModel)
     }.navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .principal) {
           Image("scorigami_title")
             .resizable()
-            .frame(width: 300)
+            .frame(width: 300, height: 50)
         }
       }
+      .toolbarBackground(.black, for: .navigationBar)
+      .toolbarBackground(.visible, for: .navigationBar)
   }
 }
 
@@ -45,18 +45,6 @@ struct NavOptions: View {
   @EnvironmentObject var viewModel: ScorigamiViewModel
   var body: some View {
     HStack {
-      if (viewModel.zoomView) {
-        // if we're in zoom view, add a back button to Full View
-        //
-        Button(action: {
-          withAnimation {
-            viewModel.toggleZoomView()
-          }
-        }) {
-          Image(systemName: "arrowshape.turn.up.backward.fill")
-            .imageScale(.large)
-        }
-      }
       Spacer()
       NavigationLink(destination: AboutView()) {
         Image(systemName: "info.circle.fill").imageScale(.large)
@@ -76,11 +64,7 @@ struct UIOptions: View {
   var body: some View {
     VStack(spacing: 4) {
       Spacer().frame(height: 20)
-      if (viewModel.zoomView) {
-        Text("Tap score for info. Drag for more scores").bold()
-      } else {
-        Text("Tap a region to view scores").bold()
-      }
+      Text("Pinch to zoom, drag to pan, tap score for info").bold()
       Spacer().frame(height: 40)
       HStack {
         VStack {
@@ -90,6 +74,7 @@ struct UIOptions: View {
               Text("Frequency").tag(Int(0))
               Text("Recency").tag(Int(1))
             }.pickerStyle(.segmented)
+              .colorScheme(.dark)
               .frame(width: 200, height: 30)
               .onChange(of: refreshView) { tag in
                 viewModel.setGradientType(type: tag)
@@ -121,6 +106,7 @@ struct GradientLegend: View {
       Spacer().frame(width: 1, alignment: .leading)
       Text(minMaxes[0])
         .font(.system(size: 12)).bold()
+        .foregroundColor(.white)
         .frame(width: 30, alignment: .trailing)
         .padding(.trailing, 4)
         .padding(.leading, 20)
@@ -143,6 +129,7 @@ struct GradientLegend: View {
       // add the max for the legend, then the color map type button
       //
       Text(minMaxes[1]).font(.system(size: 12)).frame(width: 40).bold()
+        .foregroundColor(.white)
       Button(action: viewModel.changeColorMapType ) {
         HStack{
           Text("Full Color")
