@@ -48,7 +48,7 @@ struct NavOptions: View {
       Spacer()
       NavigationLink(destination: AboutView()) {
         Image(systemName: "info.circle.fill").imageScale(.large)
-      }
+      }.buttonStyle(.plain)
       Spacer().frame(width: 0, height: 40)
     }
   }
@@ -64,7 +64,7 @@ struct UIOptions: View {
   var body: some View {
     VStack(spacing: 4) {
       Spacer().frame(height: 20)
-      Text("Pinch to zoom, drag to pan, tap score for info").bold()
+      Text("Zoom around, then tap for score info").bold()
       Spacer().frame(height: 40)
       HStack {
         VStack {

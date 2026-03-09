@@ -33,7 +33,7 @@ struct Scorigami {
   static let sourceDomain = "www.pro-football-reference.com"
   
   let particularScoreURL = "https://www.pro-football-reference.com/boxscores/game_scores_find.cgi?pts_win=WWWW&pts_lose=LLLL"
-  let allGamesURL = "https://kelaita.com/scores.html"
+  let allGamesURL = "https://pomace.net/scores.html"
   
   public func getParticularScoreURL(winningScore: Int,
                                     losingScore: Int) -> String {

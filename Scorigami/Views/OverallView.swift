@@ -65,6 +65,9 @@ struct OverallView: View {
         ZStack(alignment: .topLeading) {
           OverviewBoard(cellSize: cellSize,
                         zoomScale: zoomScale,
+                        plotWidth: plotWidth,
+                        plotHeight: plotHeight,
+                        panOffset: effectiveOffset,
                         onSelect: showScoreDetails)
             .environmentObject(viewModel)
             .frame(width: boardScaledWidth, height: boardScaledHeight, alignment: .topLeading)
@@ -74,14 +77,19 @@ struct OverallView: View {
         .clipped()
         .offset(x: axisWidth, y: topAxisHeight)
         .contentShape(Rectangle())
-        .gesture(dragGesture(boardWidth: boardWidth,
-                             boardHeight: boardHeight,
-                             plotWidth: plotWidth,
-                             plotHeight: plotHeight)
-          .simultaneously(with: zoomGesture(boardWidth: boardWidth,
-                                            boardHeight: boardHeight,
-                                            plotWidth: plotWidth,
-                                            plotHeight: plotHeight)))
+        .highPriorityGesture(zoomGesture(boardWidth: boardWidth,
+                                         boardHeight: boardHeight,
+                                         plotWidth: plotWidth,
+                                         plotHeight: plotHeight))
+        .simultaneousGesture(dragGesture(boardWidth: boardWidth,
+                                         boardHeight: boardHeight,
+                                         plotWidth: plotWidth,
+                                         plotHeight: plotHeight))
+        .simultaneousGesture(tapGesture(boardWidth: boardWidth,
+                                        boardHeight: boardHeight,
+                                        plotWidth: plotWidth,
+                                        plotHeight: plotHeight,
+                                        cellSize: cellSize))
       }
       .onChange(of: geo.size) { _ in
         let adjusted = clampedOffset(offset: panOffset,
@@ -106,7 +114,7 @@ struct OverallView: View {
                            boardHeight: CGFloat,
                            plotWidth: CGFloat,
                            plotHeight: CGFloat) -> some Gesture {
-    DragGesture(minimumDistance: 8)
+    DragGesture(minimumDistance: 3, coordinateSpace: .local)
       .onChanged { value in
         let candidate = CGSize(width: lastPanOffset.width + value.translation.width,
                                height: lastPanOffset.height + value.translation.height)
@@ -117,8 +125,40 @@ struct OverallView: View {
                                   plotWidth: plotWidth,
                                   plotHeight: plotHeight)
       }
-      .onEnded { _ in
+      .onEnded { value in
+        let coastMultiplier: CGFloat = 0.6
+        let predictedDelta = CGSize(width: value.predictedEndTranslation.width - value.translation.width,
+                                    height: value.predictedEndTranslation.height - value.translation.height)
+        let target = CGSize(width: panOffset.width + predictedDelta.width * coastMultiplier,
+                            height: panOffset.height + predictedDelta.height * coastMultiplier)
+        let clampedTarget = clampedOffset(offset: target,
+                                          scale: zoomScale,
+                                          boardWidth: boardWidth,
+                                          boardHeight: boardHeight,
+                                          plotWidth: plotWidth,
+                                          plotHeight: plotHeight)
+        withAnimation(.interpolatingSpring(stiffness: 170, damping: 28)) {
+          panOffset = clampedTarget
+        }
         lastPanOffset = panOffset
+      }
+  }
+
+  private func tapGesture(boardWidth: CGFloat,
+                          boardHeight: CGFloat,
+                          plotWidth: CGFloat,
+                          plotHeight: CGFloat,
+                          cellSize: CGFloat) -> some Gesture {
+    SpatialTapGesture(coordinateSpace: .local)
+      .onEnded { value in
+        if zoomScale < 2.2 {
+          handleTap(at: value.location,
+                    boardWidth: boardWidth,
+                    boardHeight: boardHeight,
+                    plotWidth: plotWidth,
+                    plotHeight: plotHeight,
+                    cellSize: cellSize)
+        }
       }
   }
 
@@ -187,6 +227,42 @@ struct OverallView: View {
 
   private func showScoreDetails(cell: ScorigamiViewModel.Cell) {
     selectedScore = ScoreDetails(cell: cell)
+  }
+
+  private func handleTap(at location: CGPoint,
+                         boardWidth: CGFloat,
+                         boardHeight: CGFloat,
+                         plotWidth: CGFloat,
+                         plotHeight: CGFloat,
+                         cellSize: CGFloat) {
+    let scaledCell = cellSize * zoomScale
+    if scaledCell <= 0 {
+      return
+    }
+    let effectiveOffset = clampedOffset(offset: panOffset,
+                                        scale: zoomScale,
+                                        boardWidth: boardWidth,
+                                        boardHeight: boardHeight,
+                                        plotWidth: plotWidth,
+                                        plotHeight: plotHeight)
+    let xOnBoard = (location.x - effectiveOffset.width) / scaledCell
+    let yOnBoard = (location.y - effectiveOffset.height) / scaledCell
+    let winningScore = Int(floor(xOnBoard))
+    let losingScore = Int(floor(yOnBoard))
+    if winningScore < 0 || losingScore < 0 {
+      return
+    }
+    if losingScore > viewModel.getHighestLosingScore() || winningScore > viewModel.getHighestWinningScore() {
+      return
+    }
+    let row = viewModel.getGamesForLosingScore(losingScore: losingScore)
+    if winningScore >= row.count {
+      return
+    }
+    let cell = row[winningScore]
+    if cell.label != "" {
+      showScoreDetails(cell: cell)
+    }
   }
 }
 
@@ -275,11 +351,7 @@ struct TopAxisLabels: View {
   }
 
   private func winningTicks(maxScore: Int) -> [Int] {
-    var ticks = Array(stride(from: 0, through: maxScore, by: 5))
-    if ticks.last != maxScore {
-      ticks.append(maxScore)
-    }
-    return ticks
+    Array(stride(from: 0, through: maxScore, by: 5))
   }
 }
 
@@ -309,11 +381,7 @@ struct LeftAxisLabels: View {
   }
 
   private func losingTicks(maxScore: Int) -> [Int] {
-    var ticks = Array(stride(from: 0, through: maxScore, by: 5))
-    if ticks.last != maxScore {
-      ticks.append(maxScore)
-    }
-    return ticks
+    Array(stride(from: 0, through: maxScore, by: 5))
   }
 }
 
@@ -322,44 +390,87 @@ struct OverviewBoard: View {
 
   let cellSize: CGFloat
   let zoomScale: CGFloat
+  let plotWidth: CGFloat
+  let plotHeight: CGFloat
+  let panOffset: CGSize
   let onSelect: (ScorigamiViewModel.Cell) -> Void
 
   var body: some View {
     let showLabels = zoomScale >= 2.2
     let scaledCell = cellSize * zoomScale
     let textSize = min(14.0, max(7.0, scaledCell * 0.35))
+    let roundedCells = zoomScale >= 3.0
+    let cellInset = roundedCells ? min(1.5, scaledCell * 0.08) : 0.25
+    let cornerRadius = roundedCells ? min(4.0, scaledCell * 0.18) : 0.0
+    let maxWinning = viewModel.getHighestWinningScore()
+    let maxLosing = viewModel.getHighestLosingScore()
+    let startCol = max(0, Int(floor(-panOffset.width / max(scaledCell, 0.001))))
+    let endCol = min(maxWinning, Int(ceil((plotWidth - panOffset.width) / max(scaledCell, 0.001))))
+    let startRow = max(0, Int(floor(-panOffset.height / max(scaledCell, 0.001))))
+    let endRow = min(maxLosing, Int(ceil((plotHeight - panOffset.height) / max(scaledCell, 0.001))))
 
-    VStack(spacing: 0) {
-      ForEach(0...viewModel.getHighestLosingScore(), id: \.self) { losingScore in
-        let row = viewModel.getGamesForLosingScore(losingScore: losingScore)
-        HStack(spacing: 0) {
-          ForEach(row, id: \.self) { cell in
-            let colorAndSat = viewModel.getColorAndSat(cell: cell)
-            ZStack {
-              Rectangle()
-                .foregroundColor(colorAndSat.0)
-                .saturation(colorAndSat.1)
-                .overlay(Rectangle().stroke(Color.black, lineWidth: 0.5))
-              if showLabels && cell.label != "" {
-                Text(cell.label)
-                  .font(.system(size: textSize, weight: .bold))
-                  .minimumScaleFactor(0.2)
-                  .lineLimit(1)
-                  .foregroundColor(viewModel.getTextColor(cell: cell))
-                  .padding(1)
-              }
+    ZStack(alignment: .topLeading) {
+      Canvas { context, _ in
+        for losingScore in 0...maxLosing {
+          let row = viewModel.getGamesForLosingScore(losingScore: losingScore)
+          for winningScore in 0..<row.count {
+            let cell = row[winningScore]
+            let color = resolvedFillColor(cell: cell)
+            let rect = CGRect(x: CGFloat(winningScore) * scaledCell + cellInset,
+                              y: CGFloat(losingScore) * scaledCell + cellInset,
+                              width: max(0, scaledCell - (2.0 * cellInset)),
+                              height: max(0, scaledCell - (2.0 * cellInset)))
+            if cornerRadius > 0 {
+              let rounded = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+              context.fill(rounded.path(in: rect), with: .color(color))
+            } else {
+              context.fill(Path(rect), with: .color(color))
             }
-            .frame(width: scaledCell, height: scaledCell)
-            .contentShape(Rectangle())
-            .onTapGesture {
-              if cell.label != "" {
-                onSelect(cell)
-              }
+          }
+        }
+      }
+      if showLabels && endCol >= startCol && endRow >= startRow {
+        ForEach(startRow...endRow, id: \.self) { losingScore in
+          let row = viewModel.getGamesForLosingScore(losingScore: losingScore)
+          ForEach(startCol...min(endCol, row.count - 1), id: \.self) { winningScore in
+            let cell = row[winningScore]
+            if cell.label != "" {
+              Text(cell.label)
+                .font(.system(size: textSize, weight: .bold))
+                .minimumScaleFactor(0.2)
+                .lineLimit(1)
+                .foregroundColor(viewModel.getTextColor(cell: cell))
+                .position(x: CGFloat(winningScore) * scaledCell + (scaledCell / 2.0),
+                          y: CGFloat(losingScore) * scaledCell + (scaledCell / 2.0))
+                .onTapGesture {
+                  onSelect(cell)
+                }
             }
           }
         }
       }
     }
+    .drawingGroup(opaque: true)
     .background(.black)
+  }
+
+  private func resolvedFillColor(cell: ScorigamiViewModel.Cell) -> Color {
+    let colorAndSat = viewModel.getColorAndSat(cell: cell)
+    let baseColor = colorAndSat.0
+    let sat = CGFloat(max(0.0, min(1.0, colorAndSat.1)))
+
+    let uiColor = UIColor(baseColor)
+    var hue: CGFloat = 0
+    var saturation: CGFloat = 0
+    var brightness: CGFloat = 0
+    var alpha: CGFloat = 0
+
+    if uiColor.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) {
+      return Color(uiColor: UIColor(hue: hue,
+                                    saturation: saturation * sat,
+                                    brightness: brightness,
+                                    alpha: alpha))
+    }
+    return baseColor
   }
 }
