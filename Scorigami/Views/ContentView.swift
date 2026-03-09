@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
   
@@ -29,28 +30,32 @@ struct ContentView: View {
         UIOptions().environmentObject(viewModel)
       }
     }.navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        ToolbarItem(placement: .principal) {
-          Image("scorigami_title")
-            .resizable()
-            .frame(width: 300, height: 50)
-        }
-      }
-      .toolbarBackground(.black, for: .navigationBar)
-      .toolbarBackground(.visible, for: .navigationBar)
   }
 }
 
 struct NavOptions: View {
   @EnvironmentObject var viewModel: ScorigamiViewModel
   var body: some View {
-    HStack {
-      Spacer()
+    HStack(spacing: 8) {
+      Image("scorigami_title")
+        .resizable()
+        .scaledToFit()
+        .frame(height: 42)
+      Spacer(minLength: 0)
       NavigationLink(destination: AboutView()) {
-        Image(systemName: "info.circle.fill").imageScale(.large)
-      }.buttonStyle(.plain)
-      Spacer().frame(width: 0, height: 40)
+        Image(systemName: "info.circle.fill")
+          .font(.system(size: 30, weight: .regular))
+          .foregroundColor(.blue)
+      }
+      .buttonStyle(.plain)
+      .simultaneousGesture(TapGesture().onEnded {
+        triggerLightHaptic()
+      })
     }
+    .padding(.horizontal, 12)
+    .padding(.top, 4)
+    .padding(.bottom, 6)
+    .background(.black)
   }
 }
 
@@ -64,7 +69,9 @@ struct UIOptions: View {
   var body: some View {
     VStack(spacing: 4) {
       Spacer().frame(height: 20)
-      Text("Zoom around, then tap for score info").bold()
+      Text("Zoom in, then tap for score info")
+        .bold()
+        .foregroundColor(.white)
       Spacer().frame(height: 40)
       HStack {
         VStack {
@@ -77,6 +84,7 @@ struct UIOptions: View {
               .colorScheme(.dark)
               .frame(width: 200, height: 30)
               .onChange(of: refreshView) { tag in
+                triggerLightHaptic()
                 viewModel.setGradientType(type: tag)
               }
             Spacer().frame(maxWidth: .infinity, alignment: .trailing)
@@ -130,7 +138,10 @@ struct GradientLegend: View {
       //
       Text(minMaxes[1]).font(.system(size: 12)).frame(width: 40).bold()
         .foregroundColor(.white)
-      Button(action: viewModel.changeColorMapType ) {
+      Button(action: {
+        triggerLightHaptic()
+        viewModel.changeColorMapType()
+      }) {
         HStack{
           Text("Full Color")
             .bold()
@@ -145,4 +156,10 @@ struct GradientLegend: View {
       Spacer()
     }
   }
+}
+
+private func triggerLightHaptic() {
+  let generator = UIImpactFeedbackGenerator(style: .light)
+  generator.prepare()
+  generator.impactOccurred()
 }

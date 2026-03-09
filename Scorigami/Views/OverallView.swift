@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct OverallView: View {
   @EnvironmentObject var viewModel: ScorigamiViewModel
@@ -226,6 +227,9 @@ struct OverallView: View {
   }
 
   private func showScoreDetails(cell: ScorigamiViewModel.Cell) {
+    let haptic = UIImpactFeedbackGenerator(style: .light)
+    haptic.prepare()
+    haptic.impactOccurred()
     selectedScore = ScoreDetails(cell: cell)
   }
 
@@ -339,19 +343,21 @@ struct TopAxisLabels: View {
     let ticks = winningTicks(maxScore: highestWinningScore)
     ZStack(alignment: .topLeading) {
       ForEach(ticks, id: \.self) { score in
-        let x = axisWidth + panOffset.width + (CGFloat(score) * cellSize * zoomScale)
-        if x >= axisWidth - 26.0 && x <= viewportWidth {
+        let scaledCell = cellSize * zoomScale
+        let xCenter = axisWidth + panOffset.width + (CGFloat(score) * scaledCell) + (scaledCell / 2.0)
+        if xCenter >= axisWidth - 26.0 && xCenter <= viewportWidth {
           Text(String(score))
             .font(.system(size: 10))
             .foregroundColor(.white)
-            .offset(x: x, y: topAxisHeight - 14.0)
+            .position(x: xCenter, y: topAxisHeight - 9.0)
         }
       }
     }
   }
 
   private func winningTicks(maxScore: Int) -> [Int] {
-    Array(stride(from: 0, through: maxScore, by: 5))
+    let step = zoomScale > 2.6 ? 1 : 5
+    return Array(stride(from: 0, through: maxScore, by: step))
   }
 }
 
@@ -368,20 +374,22 @@ struct LeftAxisLabels: View {
     let ticks = losingTicks(maxScore: highestLosingScore)
     ZStack(alignment: .topLeading) {
       ForEach(ticks, id: \.self) { score in
-        let y = topAxisHeight + panOffset.height + (CGFloat(score) * cellSize * zoomScale)
-        if y >= topAxisHeight - 6.0 && y <= viewportHeight {
+        let scaledCell = cellSize * zoomScale
+        let yCenter = topAxisHeight + panOffset.height + (CGFloat(score) * scaledCell) + (scaledCell / 2.0)
+        if yCenter >= topAxisHeight - 6.0 && yCenter <= viewportHeight {
           Text(String(score))
             .font(.system(size: 10))
             .foregroundColor(.white)
-            .frame(width: axisWidth - 2.0, alignment: .trailing)
-            .offset(x: 0, y: y - 6.0)
+            .frame(width: axisWidth, alignment: .center)
+            .position(x: axisWidth / 2.0, y: yCenter)
         }
       }
     }
   }
 
   private func losingTicks(maxScore: Int) -> [Int] {
-    Array(stride(from: 0, through: maxScore, by: 5))
+    let step = zoomScale > 2.6 ? 1 : 5
+    return Array(stride(from: 0, through: maxScore, by: step))
   }
 }
 
@@ -396,9 +404,9 @@ struct OverviewBoard: View {
   let onSelect: (ScorigamiViewModel.Cell) -> Void
 
   var body: some View {
-    let showLabels = zoomScale >= 2.2
+    let showLabels = zoomScale >= 2.35
     let scaledCell = cellSize * zoomScale
-    let textSize = min(14.0, max(7.0, scaledCell * 0.35))
+    let textSize = min(14.0, max(4.5, scaledCell * 0.24))
     let roundedCells = zoomScale >= 3.0
     let cellInset = roundedCells ? min(1.5, scaledCell * 0.08) : 0.25
     let cornerRadius = roundedCells ? min(4.0, scaledCell * 0.18) : 0.0
@@ -455,11 +463,37 @@ struct OverviewBoard: View {
   }
 
   private func resolvedFillColor(cell: ScorigamiViewModel.Cell) -> Color {
+    if cell.occurrences == 0 {
+      return .black
+    }
+
     let colorAndSat = viewModel.getColorAndSat(cell: cell)
     let baseColor = colorAndSat.0
     let sat = CGFloat(max(0.0, min(1.0, colorAndSat.1)))
+    let baseUIColor = UIColor(baseColor)
 
-    let uiColor = UIColor(baseColor)
+    if viewModel.colorMapType == .redSpecturm {
+      let start = UIColor(white: 0.38, alpha: 1.0)
+      let end = UIColor.red
+      var sr: CGFloat = 0
+      var sg: CGFloat = 0
+      var sb: CGFloat = 0
+      var sa: CGFloat = 0
+      var er: CGFloat = 0
+      var eg: CGFloat = 0
+      var eb: CGFloat = 0
+      var ea: CGFloat = 0
+      start.getRed(&sr, green: &sg, blue: &sb, alpha: &sa)
+      end.getRed(&er, green: &eg, blue: &eb, alpha: &ea)
+
+      let t = sat
+      let r = sr + (er - sr) * t
+      let g = sg + (eg - sg) * t
+      let b = sb + (eb - sb) * t
+      return Color(red: Double(r), green: Double(g), blue: Double(b))
+    }
+
+    let uiColor = baseUIColor
     var hue: CGFloat = 0
     var saturation: CGFloat = 0
     var brightness: CGFloat = 0
