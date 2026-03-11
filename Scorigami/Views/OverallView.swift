@@ -158,7 +158,7 @@ struct OverallView: View {
     }
     .sheet(item: $selectedScore) { details in
       GameScoreSheet(details: details)
-        .presentationDetents([.height(360), .large])
+        .presentationDetents([.height(380), .large])
         .presentationDragIndicator(.visible)
     }
   }
@@ -435,6 +435,7 @@ struct GameScoreSheet: View {
           .foregroundColor(.secondary)
         Text(details.lastGame)
           .font(.system(size: 16))
+          .lineLimit(2)
         if let url = URL(string: details.gamesUrl), !details.gamesUrl.isEmpty {
           Link(destination: url) {
             Text("View games")
@@ -442,7 +443,7 @@ struct GameScoreSheet: View {
               .frame(maxWidth: .infinity, minHeight: 44)
           }
           .buttonStyle(.borderedProminent)
-          .padding(.top, 6)
+          .padding(.top, 10)
         }
       } else {
         Text("SCORIGAMI!")
