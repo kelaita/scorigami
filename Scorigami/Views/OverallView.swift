@@ -19,6 +19,7 @@ struct OverallView: View {
   @State private var lastPanOffset: CGSize = .zero
   @State private var isPinching = false
   @State private var pinchAnchorPoint: CGPoint = .zero
+  @State private var programmaticZoomTask: Task<Void, Never>?
 
   private let axisWidth: CGFloat = 24.0
   private let topAxisHeight: CGFloat = 30.0
@@ -71,7 +72,16 @@ struct OverallView: View {
                         plotWidth: plotWidth,
                         plotHeight: plotHeight,
                         panOffset: effectiveOffset,
-                        onSelect: showScoreDetails)
+                        onSelect: { cell, winningScore, losingScore in
+                          showScoreDetails(cell: cell,
+                                           winningScore: winningScore,
+                                           losingScore: losingScore,
+                                           cellSize: cellSize,
+                                           boardWidth: boardWidth,
+                                           boardHeight: boardHeight,
+                                           plotWidth: plotWidth,
+                                           plotHeight: plotHeight)
+                        })
             .environmentObject(viewModel)
             .frame(width: boardScaledWidth, height: boardScaledHeight, alignment: .topLeading)
             .offset(x: effectiveOffset.width, y: effectiveOffset.height)
@@ -231,11 +241,33 @@ struct OverallView: View {
     return CGSize(width: x, height: y)
   }
 
-  private func showScoreDetails(cell: ScorigamiViewModel.Cell) {
+  private func showScoreDetails(cell: ScorigamiViewModel.Cell,
+                                winningScore: Int,
+                                losingScore: Int,
+                                cellSize: CGFloat,
+                                boardWidth: CGFloat,
+                                boardHeight: CGFloat,
+                                plotWidth: CGFloat,
+                                plotHeight: CGFloat) {
     let haptic = UIImpactFeedbackGenerator(style: .light)
     haptic.prepare()
     haptic.impactOccurred()
-    selectedScore = ScoreDetails(cell: cell)
+
+    let didAnimateZoom = zoomToCellIfNeeded(winningScore: winningScore,
+                                            losingScore: losingScore,
+                                            cellSize: cellSize,
+                                            boardWidth: boardWidth,
+                                            boardHeight: boardHeight,
+                                            plotWidth: plotWidth,
+                                            plotHeight: plotHeight)
+
+    if didAnimateZoom {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
+        selectedScore = ScoreDetails(cell: cell)
+      }
+    } else {
+      selectedScore = ScoreDetails(cell: cell)
+    }
   }
 
   private func handleTap(at location: CGPoint,
@@ -244,6 +276,11 @@ struct OverallView: View {
                          plotWidth: CGFloat,
                          plotHeight: CGFloat,
                          cellSize: CGFloat) {
+    // This gesture lives on a view that is visually shifted by the axis offsets.
+    // Normalize back into plot-space before converting to board coordinates.
+    let normalizedLocation = CGPoint(x: location.x - axisWidth,
+                                     y: location.y - topAxisHeight)
+
     let scaledCell = cellSize * zoomScale
     if scaledCell <= 0 {
       return
@@ -254,8 +291,8 @@ struct OverallView: View {
                                         boardHeight: boardHeight,
                                         plotWidth: plotWidth,
                                         plotHeight: plotHeight)
-    let xOnBoard = (location.x - effectiveOffset.width) / scaledCell
-    let yOnBoard = (location.y - effectiveOffset.height) / scaledCell
+    let xOnBoard = (normalizedLocation.x - effectiveOffset.width) / scaledCell
+    let yOnBoard = (normalizedLocation.y - effectiveOffset.height) / scaledCell
     let winningScore = Int(floor(xOnBoard))
     let losingScore = Int(floor(yOnBoard))
     if winningScore < 0 || losingScore < 0 {
@@ -270,7 +307,69 @@ struct OverallView: View {
     }
     let cell = row[winningScore]
     if cell.label != "" {
-      showScoreDetails(cell: cell)
+      showScoreDetails(cell: cell,
+                       winningScore: winningScore,
+                       losingScore: losingScore,
+                       cellSize: cellSize,
+                       boardWidth: boardWidth,
+                       boardHeight: boardHeight,
+                       plotWidth: plotWidth,
+                       plotHeight: plotHeight)
+    }
+  }
+
+  private func zoomToCellIfNeeded(winningScore: Int,
+                                  losingScore: Int,
+                                  cellSize: CGFloat,
+                                  boardWidth: CGFloat,
+                                  boardHeight: CGFloat,
+                                  plotWidth: CGFloat,
+                                  plotHeight: CGFloat) -> Bool {
+    let targetScale = clampedScale(9.0)
+    if zoomScale >= targetScale - 0.01 {
+      return false
+    }
+
+    let targetCell = cellSize * targetScale
+    let cellCenterX = CGFloat(winningScore) * targetCell + (targetCell / 2.0)
+    let cellCenterY = CGFloat(losingScore) * targetCell + (targetCell / 2.0)
+    let rawOffset = CGSize(width: (plotWidth / 2.0) - cellCenterX,
+                           height: (plotHeight / 2.0) - cellCenterY)
+    let clampedTargetOffset = clampedOffset(offset: rawOffset,
+                                            scale: targetScale,
+                                            boardWidth: boardWidth,
+                                            boardHeight: boardHeight,
+                                            plotWidth: plotWidth,
+                                            plotHeight: plotHeight)
+    animateZoomAndPan(toScale: targetScale,
+                      toOffset: clampedTargetOffset)
+    return true
+  }
+
+  private func animateZoomAndPan(toScale: CGFloat,
+                                 toOffset: CGSize,
+                                 duration: Double = 0.65) {
+    let startScale = zoomScale
+    let startOffset = panOffset
+    programmaticZoomTask?.cancel()
+    programmaticZoomTask = Task { @MainActor in
+      let frameCount = 40
+      for frame in 0...frameCount {
+        if Task.isCancelled { return }
+        let t = CGFloat(frame) / CGFloat(frameCount)
+        let eased = t * t * (3.0 - (2.0 * t)) // smoothstep
+        zoomScale = startScale + (toScale - startScale) * eased
+        panOffset = CGSize(width: startOffset.width + (toOffset.width - startOffset.width) * eased,
+                           height: startOffset.height + (toOffset.height - startOffset.height) * eased)
+        if frame < frameCount {
+          try? await Task.sleep(nanoseconds: UInt64((duration / Double(frameCount)) * 1_000_000_000))
+        }
+      }
+      zoomScale = toScale
+      panOffset = toOffset
+      lastZoomScale = toScale
+      lastPanOffset = toOffset
+      programmaticZoomTask = nil
     }
   }
 }
@@ -406,7 +505,7 @@ struct OverviewBoard: View {
   let plotWidth: CGFloat
   let plotHeight: CGFloat
   let panOffset: CGSize
-  let onSelect: (ScorigamiViewModel.Cell) -> Void
+  let onSelect: (ScorigamiViewModel.Cell, Int, Int) -> Void
 
   var body: some View {
     let showLabels = zoomScale >= 2.35
@@ -472,9 +571,9 @@ struct OverviewBoard: View {
                 .foregroundColor(viewModel.getTextColor(cell: cell))
                 .frame(width: scaledCell * 0.92, height: scaledCell * 0.88, alignment: .center)
                 .position(x: CGFloat(winningScore) * scaledCell + (scaledCell / 2.0),
-                          y: CGFloat(losingScore) * scaledCell + (scaledCell / 2.0))
+                  y: CGFloat(losingScore) * scaledCell + (scaledCell / 2.0))
                 .onTapGesture {
-                  onSelect(cell)
+                  onSelect(cell, winningScore, losingScore)
                 }
               } else {
                 Text(cell.label)
@@ -485,7 +584,7 @@ struct OverviewBoard: View {
                   .position(x: CGFloat(winningScore) * scaledCell + (scaledCell / 2.0),
                             y: CGFloat(losingScore) * scaledCell + (scaledCell / 2.0))
                   .onTapGesture {
-                    onSelect(cell)
+                    onSelect(cell, winningScore, losingScore)
                   }
               }
             }
