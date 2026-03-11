@@ -407,6 +407,8 @@ struct OverviewBoard: View {
     let showLabels = zoomScale >= 2.35
     let scaledCell = cellSize * zoomScale
     let textSize = min(14.0, max(4.5, scaledCell * 0.24))
+    let showOccurrenceLine = scaledCell >= 34.0
+    let occurrenceTextSize = max(4.0, textSize * 0.72)
     let roundedCells = zoomScale >= 3.0
     let cellInset = roundedCells ? min(1.5, scaledCell * 0.08) : 0.25
     let cornerRadius = roundedCells ? min(4.0, scaledCell * 0.18) : 0.0
@@ -443,16 +445,36 @@ struct OverviewBoard: View {
           ForEach(startCol...min(endCol, row.count - 1), id: \.self) { winningScore in
             let cell = row[winningScore]
             if cell.label != "" {
-              Text(cell.label)
-                .font(.system(size: textSize, weight: .bold))
-                .minimumScaleFactor(0.2)
-                .lineLimit(1)
+              if showOccurrenceLine {
+                VStack(spacing: max(1.0, scaledCell * 0.04)) {
+                  Text(cell.label)
+                    .font(.system(size: textSize, weight: .bold))
+                    .minimumScaleFactor(0.2)
+                    .lineLimit(1)
+                  Text(cell.occurrences == 0 ? "SCORIGAMI" : "(\(cell.occurrences))")
+                    .font(.system(size: occurrenceTextSize, weight: .semibold))
+                    .minimumScaleFactor(0.2)
+                    .lineLimit(1)
+                }
                 .foregroundColor(viewModel.getTextColor(cell: cell))
+                .frame(width: scaledCell * 0.92, height: scaledCell * 0.88, alignment: .center)
                 .position(x: CGFloat(winningScore) * scaledCell + (scaledCell / 2.0),
                           y: CGFloat(losingScore) * scaledCell + (scaledCell / 2.0))
                 .onTapGesture {
                   onSelect(cell)
                 }
+              } else {
+                Text(cell.label)
+                  .font(.system(size: textSize, weight: .bold))
+                  .minimumScaleFactor(0.2)
+                  .lineLimit(1)
+                  .foregroundColor(viewModel.getTextColor(cell: cell))
+                  .position(x: CGFloat(winningScore) * scaledCell + (scaledCell / 2.0),
+                            y: CGFloat(losingScore) * scaledCell + (scaledCell / 2.0))
+                  .onTapGesture {
+                    onSelect(cell)
+                  }
+              }
             }
           }
         }
