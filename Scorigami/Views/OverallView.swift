@@ -17,6 +17,8 @@ struct OverallView: View {
   @State private var lastZoomScale: CGFloat = 1.0
   @State private var panOffset: CGSize = .zero
   @State private var lastPanOffset: CGSize = .zero
+  @State private var isPinching = false
+  @State private var pinchAnchorPoint: CGPoint = .zero
 
   private let axisWidth: CGFloat = 24.0
   private let topAxisHeight: CGFloat = 30.0
@@ -78,10 +80,44 @@ struct OverallView: View {
         .clipped()
         .offset(x: axisWidth, y: topAxisHeight)
         .contentShape(Rectangle())
-        .highPriorityGesture(zoomGesture(boardWidth: boardWidth,
-                                         boardHeight: boardHeight,
-                                         plotWidth: plotWidth,
-                                         plotHeight: plotHeight))
+        .overlay(
+          PinchZoomCaptureView(
+            onBegan: { location in
+              isPinching = true
+              pinchAnchorPoint = location
+              lastZoomScale = zoomScale
+              lastPanOffset = panOffset
+            },
+            onChanged: { magnification, location in
+              let nextScale = clampedScale(lastZoomScale * magnification)
+              let adjustedOffset = adjustedOffsetForScale(oldScale: lastZoomScale,
+                                                          newScale: nextScale,
+                                                          oldOffset: lastPanOffset,
+                                                          focusPoint: pinchAnchorPoint == .zero ? location : pinchAnchorPoint)
+              zoomScale = nextScale
+              panOffset = clampedOffset(offset: adjustedOffset,
+                                        scale: zoomScale,
+                                        boardWidth: boardWidth,
+                                        boardHeight: boardHeight,
+                                        plotWidth: plotWidth,
+                                        plotHeight: plotHeight)
+            },
+            onEnded: {
+              lastZoomScale = zoomScale
+              panOffset = clampedOffset(offset: panOffset,
+                                        scale: zoomScale,
+                                        boardWidth: boardWidth,
+                                        boardHeight: boardHeight,
+                                        plotWidth: plotWidth,
+                                        plotHeight: plotHeight)
+              lastPanOffset = panOffset
+              DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                isPinching = false
+                pinchAnchorPoint = .zero
+              }
+            }
+          )
+        )
         .simultaneousGesture(dragGesture(boardWidth: boardWidth,
                                          boardHeight: boardHeight,
                                          plotWidth: plotWidth,
@@ -117,6 +153,7 @@ struct OverallView: View {
                            plotHeight: CGFloat) -> some Gesture {
     DragGesture(minimumDistance: 3, coordinateSpace: .local)
       .onChanged { value in
+        if isPinching { return }
         let candidate = CGSize(width: lastPanOffset.width + value.translation.width,
                                height: lastPanOffset.height + value.translation.height)
         panOffset = clampedOffset(offset: candidate,
@@ -127,6 +164,10 @@ struct OverallView: View {
                                   plotHeight: plotHeight)
       }
       .onEnded { value in
+        if isPinching {
+          lastPanOffset = panOffset
+          return
+        }
         let coastMultiplier: CGFloat = 0.6
         let predictedDelta = CGSize(width: value.predictedEndTranslation.width - value.translation.width,
                                     height: value.predictedEndTranslation.height - value.translation.height)
@@ -152,7 +193,7 @@ struct OverallView: View {
                           cellSize: CGFloat) -> some Gesture {
     SpatialTapGesture(coordinateSpace: .local)
       .onEnded { value in
-        if zoomScale < 2.2 {
+        if zoomScale < 2.35 {
           handleTap(at: value.location,
                     boardWidth: boardWidth,
                     boardHeight: boardHeight,
@@ -163,50 +204,14 @@ struct OverallView: View {
       }
   }
 
-  private func zoomGesture(boardWidth: CGFloat,
-                           boardHeight: CGFloat,
-                           plotWidth: CGFloat,
-                           plotHeight: CGFloat) -> some Gesture {
-    MagnificationGesture()
-      .onChanged { value in
-        let nextScale = clampedScale(lastZoomScale * value)
-        let adjustedOffset = adjustedOffsetForScale(oldScale: lastZoomScale,
-                                                    newScale: nextScale,
-                                                    oldOffset: lastPanOffset,
-                                                    plotWidth: plotWidth,
-                                                    plotHeight: plotHeight)
-        zoomScale = nextScale
-        panOffset = clampedOffset(offset: adjustedOffset,
-                                  scale: zoomScale,
-                                  boardWidth: boardWidth,
-                                  boardHeight: boardHeight,
-                                  plotWidth: plotWidth,
-                                  plotHeight: plotHeight)
-      }
-      .onEnded { value in
-        zoomScale = clampedScale(lastZoomScale * value)
-        lastZoomScale = zoomScale
-        panOffset = clampedOffset(offset: panOffset,
-                                  scale: zoomScale,
-                                  boardWidth: boardWidth,
-                                  boardHeight: boardHeight,
-                                  plotWidth: plotWidth,
-                                  plotHeight: plotHeight)
-        lastPanOffset = panOffset
-      }
-  }
-
   private func adjustedOffsetForScale(oldScale: CGFloat,
                                       newScale: CGFloat,
                                       oldOffset: CGSize,
-                                      plotWidth: CGFloat,
-                                      plotHeight: CGFloat) -> CGSize {
-    let centerX = plotWidth / 2.0
-    let centerY = plotHeight / 2.0
-    let contentX = (centerX - oldOffset.width) / max(oldScale, 0.001)
-    let contentY = (centerY - oldOffset.height) / max(oldScale, 0.001)
-    return CGSize(width: centerX - (contentX * newScale),
-                  height: centerY - (contentY * newScale))
+                                      focusPoint: CGPoint) -> CGSize {
+    let contentX = (focusPoint.x - oldOffset.width) / max(oldScale, 0.001)
+    let contentY = (focusPoint.y - oldOffset.height) / max(oldScale, 0.001)
+    return CGSize(width: focusPoint.x - (contentX * newScale),
+                  height: focusPoint.y - (contentY * newScale))
   }
 
   private func clampedScale(_ rawScale: CGFloat) -> CGFloat {
@@ -446,15 +451,23 @@ struct OverviewBoard: View {
             let cell = row[winningScore]
             if cell.label != "" {
               if showOccurrenceLine {
-                VStack(spacing: max(1.0, scaledCell * 0.04)) {
+                ZStack {
                   Text(cell.label)
                     .font(.system(size: textSize, weight: .bold))
                     .minimumScaleFactor(0.2)
                     .lineLimit(1)
-                  Text(cell.occurrences == 0 ? "SCORIGAMI" : "(\(cell.occurrences))")
-                    .font(.system(size: occurrenceTextSize, weight: .semibold))
-                    .minimumScaleFactor(0.2)
-                    .lineLimit(1)
+                  if cell.occurrences > 0 {
+                    Text("(\(cell.occurrences))")
+                      .font(.system(size: occurrenceTextSize, weight: .semibold))
+                      .minimumScaleFactor(0.1)
+                      .lineLimit(1)
+                      .allowsTightening(true)
+                      .multilineTextAlignment(.trailing)
+                      .frame(width: scaledCell * 0.78, alignment: .trailing)
+                      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                      .padding(.trailing, max(1.0, scaledCell * 0.08))
+                      .padding(.bottom, max(1.0, scaledCell * 0.06))
+                  }
                 }
                 .foregroundColor(viewModel.getTextColor(cell: cell))
                 .frame(width: scaledCell * 0.92, height: scaledCell * 0.88, alignment: .center)
@@ -528,5 +541,93 @@ struct OverviewBoard: View {
                                     alpha: alpha))
     }
     return baseColor
+  }
+}
+
+private struct PinchZoomCaptureView: UIViewRepresentable {
+  var onBegan: (CGPoint) -> Void
+  var onChanged: (CGFloat, CGPoint) -> Void
+  var onEnded: () -> Void
+
+  func makeCoordinator() -> Coordinator {
+    Coordinator(onBegan: onBegan, onChanged: onChanged, onEnded: onEnded)
+  }
+
+  func makeUIView(context: Context) -> UIView {
+    let view = UIView(frame: .zero)
+    view.backgroundColor = .clear
+    view.isUserInteractionEnabled = false
+    return view
+  }
+
+  func updateUIView(_ uiView: UIView, context: Context) {
+    DispatchQueue.main.async {
+      guard let host = uiView.superview else { return }
+      context.coordinator.installIfNeeded(on: host)
+    }
+  }
+
+  final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+    private let onBegan: (CGPoint) -> Void
+    private let onChanged: (CGFloat, CGPoint) -> Void
+    private let onEnded: () -> Void
+    private var pinchRecognizer: UIPinchGestureRecognizer?
+    private weak var installedGestureView: UIView?
+    private weak var targetHostView: UIView?
+    private var pinchActive = false
+
+    init(onBegan: @escaping (CGPoint) -> Void,
+         onChanged: @escaping (CGFloat, CGPoint) -> Void,
+         onEnded: @escaping () -> Void) {
+      self.onBegan = onBegan
+      self.onChanged = onChanged
+      self.onEnded = onEnded
+    }
+
+    func installIfNeeded(on view: UIView) {
+      let gestureView = view.window ?? view
+      if installedGestureView === gestureView, targetHostView === view, pinchRecognizer != nil {
+        return
+      }
+      if let oldView = installedGestureView, let recognizer = pinchRecognizer {
+        oldView.removeGestureRecognizer(recognizer)
+      }
+      let recognizer = UIPinchGestureRecognizer(target: self,
+                                                action: #selector(handlePinch(_:)))
+      recognizer.cancelsTouchesInView = false
+      recognizer.delegate = self
+      gestureView.addGestureRecognizer(recognizer)
+      pinchRecognizer = recognizer
+      installedGestureView = gestureView
+      targetHostView = view
+    }
+
+    @objc func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
+      guard let hostView = targetHostView else { return }
+      let location = recognizer.location(in: hostView)
+      switch recognizer.state {
+      case .began:
+        guard hostView.bounds.contains(location) else {
+          pinchActive = false
+          return
+        }
+        pinchActive = true
+        onBegan(location)
+      case .changed:
+        guard pinchActive else { return }
+        onChanged(recognizer.scale, location)
+      case .ended, .cancelled, .failed:
+        guard pinchActive else { return }
+        pinchActive = false
+        onEnded()
+      default:
+        break
+      }
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+      true
+    }
   }
 }
