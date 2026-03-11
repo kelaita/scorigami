@@ -158,7 +158,7 @@ struct OverallView: View {
     }
     .sheet(item: $selectedScore) { details in
       GameScoreSheet(details: details)
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.height(360), .large])
         .presentationDragIndicator(.visible)
     }
   }
@@ -423,7 +423,7 @@ struct GameScoreSheet: View {
   @Environment(\.dismiss) private var dismiss
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
+    VStack(alignment: .leading, spacing: 14) {
       Text(details.score)
         .font(.system(size: 30, weight: .bold))
         .frame(maxWidth: .infinity, alignment: .center)
@@ -438,7 +438,8 @@ struct GameScoreSheet: View {
         if let url = URL(string: details.gamesUrl), !details.gamesUrl.isEmpty {
           Link(destination: url) {
             Text("View games")
-              .frame(maxWidth: .infinity)
+              .multilineTextAlignment(.center)
+              .frame(maxWidth: .infinity, minHeight: 44)
           }
           .buttonStyle(.borderedProminent)
           .padding(.top, 6)
@@ -450,14 +451,19 @@ struct GameScoreSheet: View {
         Text("No game has ever ended with this score...yet.")
           .font(.system(size: 17, weight: .semibold))
       }
-      Spacer(minLength: 0)
-      Button("Done") {
+      Spacer(minLength: 8)
+      Button(action: {
         dismiss()
+      }) {
+        Text("Done")
+          .multilineTextAlignment(.center)
+          .frame(maxWidth: .infinity, minHeight: 44)
       }
-      .frame(maxWidth: .infinity)
       .buttonStyle(.bordered)
     }
-    .padding(20)
+    .padding(.horizontal, 20)
+    .padding(.top, 18)
+    .padding(.bottom, 18)
   }
 }
 
