@@ -555,8 +555,8 @@ struct OverviewBoard: View {
                     .font(.system(size: textSize, weight: .bold))
                     .minimumScaleFactor(0.2)
                     .lineLimit(1)
-                  if cell.occurrences > 0 {
-                    Text("(\(cell.occurrences))")
+                  if let detail = detailText(for: cell) {
+                    Text(detail)
                       .font(.system(size: occurrenceTextSize, weight: .semibold))
                       .minimumScaleFactor(0.1)
                       .lineLimit(1)
@@ -640,6 +640,14 @@ struct OverviewBoard: View {
                                     alpha: alpha))
     }
     return baseColor
+  }
+
+  private func detailText(for cell: ScorigamiViewModel.Cell) -> String? {
+    guard cell.occurrences > 0 else { return nil }
+    if viewModel.gradientType == .recency {
+      return "(\(viewModel.getMostRecentYear(gameDesc: cell.lastGame)))"
+    }
+    return "(\(cell.occurrences))"
   }
 }
 
