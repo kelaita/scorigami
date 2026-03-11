@@ -25,6 +25,7 @@ class ScorigamiViewModel: ObservableObject {
   @Published var gradientType: GradientType = .frequency
   
   @Published var zoomView: Bool = false
+  @Published var resetRequestID: Int = 0
   var scrollToCell: String = ""
   
   public struct Cell: Hashable, Identifiable {
@@ -341,6 +342,10 @@ class ScorigamiViewModel: ObservableObject {
   
   public func toggleZoomView() {
     zoomView.toggle()
+  }
+
+  public func requestResetView() {
+    resetRequestID += 1
   }
   
   public func setGradientType(type: Int) {

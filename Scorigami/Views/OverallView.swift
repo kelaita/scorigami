@@ -148,6 +148,12 @@ struct OverallView: View {
         panOffset = adjusted
         lastPanOffset = adjusted
       }
+      .onChange(of: viewModel.resetRequestID) { _ in
+        resetToOverview(boardWidth: boardWidth,
+                        boardHeight: boardHeight,
+                        plotWidth: plotWidth,
+                        plotHeight: plotHeight)
+      }
       .background(.black)
     }
     .sheet(item: $selectedScore) { details in
@@ -371,6 +377,27 @@ struct OverallView: View {
       lastPanOffset = toOffset
       programmaticZoomTask = nil
     }
+  }
+
+  private func resetToOverview(boardWidth: CGFloat,
+                               boardHeight: CGFloat,
+                               plotWidth: CGFloat,
+                               plotHeight: CGFloat) {
+    let targetScale: CGFloat = 1.0
+    let targetOffset = clampedOffset(offset: .zero,
+                                     scale: targetScale,
+                                     boardWidth: boardWidth,
+                                     boardHeight: boardHeight,
+                                     plotWidth: plotWidth,
+                                     plotHeight: plotHeight)
+    if abs(zoomScale - targetScale) < 0.001 &&
+        abs(panOffset.width - targetOffset.width) < 0.001 &&
+        abs(panOffset.height - targetOffset.height) < 0.001 {
+      return
+    }
+    animateZoomAndPan(toScale: targetScale,
+                      toOffset: targetOffset,
+                      duration: 0.55)
   }
 }
 

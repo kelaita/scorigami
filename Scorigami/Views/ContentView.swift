@@ -88,6 +88,24 @@ struct UIOptions: View {
                 viewModel.setGradientType(type: tag)
               }
             Spacer().frame(maxWidth: .infinity, alignment: .trailing)
+            Button(action: {
+              triggerLightHaptic()
+              viewModel.requestResetView()
+            }) {
+              HStack(spacing: 4) {
+                Text("Reset")
+                  .font(.system(size: 14, weight: .regular))
+                  .foregroundColor(.white)
+                  .lineLimit(1)
+                  .fixedSize(horizontal: true, vertical: false)
+                Image(systemName: "scope")
+                  .font(.system(size: 14, weight: .regular))
+                  .foregroundColor(.white)
+              }
+            }
+            .buttonStyle(.plain)
+            .frame(minWidth: 74, alignment: .trailing)
+            .padding(.trailing, 16)
           }
         }
       }
@@ -149,9 +167,11 @@ struct GradientLegend: View {
             .foregroundColor(.white)
           Image(systemName: viewModel.colorMapType == .fullSpectrum ?
                 "checkmark.square": "square")
+            .font(.system(size: 14, weight: .bold))
             .foregroundColor(.white)
         }
       }.frame(maxWidth: .infinity, alignment: .trailing)
+        .buttonStyle(.plain)
         .padding(.trailing, 2)
       Spacer()
     }
