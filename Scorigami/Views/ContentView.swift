@@ -8,6 +8,15 @@
 import SwiftUI
 import UIKit
 
+private let bottomControlFontSize: CGFloat = 12
+private let bottomControlFontWeight: Font.Weight = .semibold
+private let bottomControlFont: Font = .system(size: bottomControlFontSize,
+                                              weight: bottomControlFontWeight)
+private let bottomControlIconSize: CGFloat = 18
+private let rightControlWidth: CGFloat = 126
+private let rightControlTrailing: CGFloat = 14
+private let rightIconBox: CGFloat = 18
+
 struct ContentView: View {
   
   @StateObject var viewModel: ScorigamiViewModel  = ScorigamiViewModel()
@@ -78,8 +87,12 @@ struct UIOptions: View {
           HStack {
             Spacer().frame(width: 50, alignment: .leading)
             Picker("", selection: $refreshView) {
-              Text("Frequency").tag(Int(0))
-              Text("Recency").tag(Int(1))
+              Text("Frequency")
+                .font(bottomControlFont)
+                .tag(Int(0))
+              Text("Recency")
+                .font(bottomControlFont)
+                .tag(Int(1))
             }.pickerStyle(.segmented)
               .colorScheme(.dark)
               .frame(width: 200, height: 30)
@@ -87,25 +100,27 @@ struct UIOptions: View {
                 triggerLightHaptic()
                 viewModel.setGradientType(type: tag)
               }
-            Spacer().frame(maxWidth: .infinity, alignment: .trailing)
+            Spacer(minLength: 0)
             Button(action: {
               triggerLightHaptic()
               viewModel.requestResetView()
             }) {
-              HStack(spacing: 4) {
+              HStack(spacing: 8) {
                 Text("Reset")
-                  .font(.system(size: 14, weight: .regular))
+                  .font(bottomControlFont)
                   .foregroundColor(.white)
                   .lineLimit(1)
                   .fixedSize(horizontal: true, vertical: false)
                 Image(systemName: "scope")
-                  .font(.system(size: 14, weight: .regular))
+                  .font(.system(size: bottomControlIconSize, weight: bottomControlFontWeight))
                   .foregroundColor(.white)
+                  .frame(width: rightIconBox, alignment: .trailing)
               }
+              .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .buttonStyle(.plain)
-            .frame(minWidth: 74, alignment: .trailing)
-            .padding(.trailing, 16)
+            .frame(width: rightControlWidth, alignment: .trailing)
+            .padding(.trailing, rightControlTrailing)
           }
         }
       }
@@ -131,7 +146,7 @@ struct GradientLegend: View {
     HStack (spacing: 2) {
       Spacer().frame(width: 1, alignment: .leading)
       Text(minMaxes[0])
-        .font(.system(size: 12)).bold()
+        .font(bottomControlFont)
         .foregroundColor(.white)
         .frame(width: 30, alignment: .trailing)
         .padding(.trailing, 4)
@@ -154,7 +169,7 @@ struct GradientLegend: View {
       }
       // add the max for the legend, then the color map type button
       //
-      Text(minMaxes[1]).font(.system(size: 12)).frame(width: 40).bold()
+      Text(minMaxes[1]).font(bottomControlFont).frame(width: 40)
         .foregroundColor(.white)
       Button(action: {
         triggerLightHaptic()
@@ -162,18 +177,18 @@ struct GradientLegend: View {
       }) {
         HStack{
           Text("Full Color")
-            .bold()
-            .font(.system(size: 12))
+            .font(bottomControlFont)
             .foregroundColor(.white)
           Image(systemName: viewModel.colorMapType == .fullSpectrum ?
                 "checkmark.square": "square")
-            .font(.system(size: 14, weight: .bold))
+            .font(.system(size: bottomControlIconSize, weight: bottomControlFontWeight))
             .foregroundColor(.white)
+            .frame(width: rightIconBox, alignment: .trailing)
         }
-      }.frame(maxWidth: .infinity, alignment: .trailing)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+      }.frame(width: rightControlWidth, alignment: .trailing)
         .buttonStyle(.plain)
-        .padding(.trailing, 2)
-      Spacer()
+        .padding(.trailing, rightControlTrailing)
     }
   }
 }

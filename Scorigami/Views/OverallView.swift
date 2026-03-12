@@ -589,6 +589,7 @@ struct OverviewBoard: View {
                     .font(.system(size: textSize, weight: .bold))
                     .minimumScaleFactor(0.2)
                     .lineLimit(1)
+                    .offset(y: -scaledCell * 0.08)
                   if let detail = detailText(for: cell) {
                     Text(detail)
                       .font(.system(size: occurrenceTextSize, weight: .semibold))
