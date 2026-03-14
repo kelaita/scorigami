@@ -420,6 +420,7 @@ struct ScoreDetails: Identifiable {
 
 struct GameScoreSheet: View {
   let details: ScoreDetails
+  @EnvironmentObject var viewModel: ScorigamiViewModel
   @Environment(\.dismiss) private var dismiss
 
   var body: some View {
@@ -428,8 +429,10 @@ struct GameScoreSheet: View {
         .font(.system(size: 30, weight: .bold))
         .frame(maxWidth: .infinity, alignment: .center)
       if details.occurrences > 0 {
-        Text("This score has happened \(details.occurrences) time\(details.plural).")
-          .font(.system(size: 17, weight: .semibold))
+        if !viewModel.isRecencyFilterActive() {
+          Text("This score has happened \(details.occurrences) time\(details.plural).")
+            .font(.system(size: 17, weight: .semibold))
+        }
         Text("Most recent game:")
           .font(.system(size: 14))
           .foregroundColor(.secondary)
@@ -583,7 +586,7 @@ struct OverviewBoard: View {
           ForEach(startCol...min(endCol, row.count - 1), id: \.self) { winningScore in
             let cell = row[winningScore]
             if cell.label != "" {
-              if showOccurrenceLine {
+              if detailText(for: cell) != nil {
                 ZStack {
                   Text(cell.label)
                     .font(.system(size: textSize, weight: .bold))
@@ -615,6 +618,7 @@ struct OverviewBoard: View {
                   .font(.system(size: textSize, weight: .bold))
                   .minimumScaleFactor(0.2)
                   .lineLimit(1)
+                  .offset(y: -scaledCell * 0.08)
                   .foregroundColor(viewModel.getTextColor(cell: cell))
                   .position(x: CGFloat(winningScore) * scaledCell + (scaledCell / 2.0),
                             y: CGFloat(losingScore) * scaledCell + (scaledCell / 2.0))
@@ -680,6 +684,9 @@ struct OverviewBoard: View {
   private func detailText(for cell: ScorigamiViewModel.Cell) -> String? {
     guard cell.occurrences > 0 else { return nil }
     if viewModel.gradientType == .recency {
+      if viewModel.isRecencyFilterActive() {
+        return nil
+      }
       return "(\(viewModel.getMostRecentYear(gameDesc: cell.lastGame)))"
     }
     return "(\(cell.occurrences))"

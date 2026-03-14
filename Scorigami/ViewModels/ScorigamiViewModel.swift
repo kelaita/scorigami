@@ -8,6 +8,7 @@
 import SwiftUI
 
 class ScorigamiViewModel: ObservableObject {
+  static let filteredOutRecencyColor = Color(white: 0.18)
   
   var model: Scorigami
   
@@ -23,6 +24,7 @@ class ScorigamiViewModel: ObservableObject {
     case frequency, recency
   }
   @Published var gradientType: GradientType = .frequency
+  @Published var selectedRecencyStartYear: Int = 1920
   
   @Published var zoomView: Bool = false
   @Published var resetRequestID: Int = 0
@@ -54,6 +56,7 @@ class ScorigamiViewModel: ObservableObject {
     model = ScorigamiViewModel.createScorigami()
     if isNetworkAvailable() {
       model.games.sort { $0.winningScore < $1.winningScore }
+      selectedRecencyStartYear = model.earliestGameYear
       buildBoard()
       buildColorMap()
     }
@@ -202,18 +205,56 @@ class ScorigamiViewModel: ObservableObject {
     let year = gameDesc.suffix(4)
     return Int(year) ?? model.earliestGameYear
   }
+
+  public func getCurrentYear() -> Int {
+    Calendar.current.component(.year, from: Date())
+  }
+
+  public func isRecencyFilterActive() -> Bool {
+    gradientType == .recency && selectedRecencyStartYear > model.earliestGameYear
+  }
+
+  public func updateRecencyStartYear(_ year: Int) {
+    selectedRecencyStartYear = min(max(year, model.earliestGameYear), getCurrentYear())
+  }
+
+  public func isCellVisibleForCurrentFilters(cell: Cell) -> Bool {
+    guard cell.label != "" else { return false }
+    if gradientType == .recency && cell.occurrences > 0 {
+      return getMostRecentYear(gameDesc: cell.lastGame) >= selectedRecencyStartYear
+    }
+    return cell.occurrences > 0
+  }
+
+  private func currentRecencySaturation(for cell: Cell) -> Double {
+    let minYear = selectedRecencyStartYear
+    let maxYear = getCurrentYear()
+    let year = getMostRecentYear(gameDesc: cell.lastGame)
+    let floor = isRecencyFilterActive() ? 0.01 : 0.0
+    return getSaturation(min: minYear,
+                         max: maxYear,
+                         val: year,
+                         skewLower: floor,
+                         skewUpper: 1.0)
+  }
   
   public func getSaturation(min: Int,
                             max: Int,
                             val: Int,
                             skewLower: Double,
                             skewUpper: Double) -> Double {
+    if max <= min {
+      return val >= max ? 1.0 : 0.0
+    }
     let floorSaturationPercent = skewLower
     
     // the following improves the appearance by making
     // highest intensity before the very top
     //
     let newMax = Double(max - min) * skewUpper + Double(min)
+    if newMax <= Double(min) {
+      return val >= max ? 1.0 : 0.0
+    }
     let ratio = (Double(val) - Double(min)) /
                 (newMax - Double(min))
     let saturation = (1.0 - floorSaturationPercent) *
@@ -247,8 +288,8 @@ class ScorigamiViewModel: ObservableObject {
       return ["1", String(model.highestCounter)]
     }
     else {
-      return [String(model.earliestGameYear),
-              String(Calendar.current.component(.year, from: Date()))]
+      return [String(selectedRecencyStartYear),
+              String(getCurrentYear())]
     }
   }
   
@@ -296,7 +337,10 @@ class ScorigamiViewModel: ObservableObject {
     if gradientType == .frequency {
       val = cell.frequencySaturation
     } else {
-      val = cell.recencySaturation
+      if !isCellVisibleForCurrentFilters(cell: cell) {
+        return (ScorigamiViewModel.filteredOutRecencyColor, 1.0)
+      }
+      val = currentRecencySaturation(for: cell)
     }
     if val == 0.0 {
       return (Color.black, 1.0)
@@ -310,6 +354,9 @@ class ScorigamiViewModel: ObservableObject {
     if index > 99 {
       index = 99
     }
+    if index < 0 {
+      index = 0
+    }
     var r: Double
     var g: Double
     var b: Double
@@ -322,7 +369,10 @@ class ScorigamiViewModel: ObservableObject {
     if gradientType == .frequency {
       val = cell.frequencySaturation
     } else {
-      val = cell.recencySaturation
+      if !isCellVisibleForCurrentFilters(cell: cell) {
+        return Color.white
+      }
+      val = currentRecencySaturation(for: cell)
     }
     
     if val < 0.2 || val > 0.8 ||
