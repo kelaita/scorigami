@@ -210,12 +210,12 @@ struct OverallView: View {
     SpatialTapGesture(coordinateSpace: .local)
       .onEnded { value in
         if zoomScale < 2.35 {
-          handleTap(at: value.location,
-                    boardWidth: boardWidth,
-                    boardHeight: boardHeight,
-                    plotWidth: plotWidth,
-                    plotHeight: plotHeight,
-                    cellSize: cellSize)
+          zoomToTappedCell(at: value.location,
+                           boardWidth: boardWidth,
+                           boardHeight: boardHeight,
+                           plotWidth: plotWidth,
+                           plotHeight: plotHeight,
+                           cellSize: cellSize)
         }
       }
   }
@@ -276,12 +276,12 @@ struct OverallView: View {
     }
   }
 
-  private func handleTap(at location: CGPoint,
-                         boardWidth: CGFloat,
-                         boardHeight: CGFloat,
-                         plotWidth: CGFloat,
-                         plotHeight: CGFloat,
-                         cellSize: CGFloat) {
+  private func zoomToTappedCell(at location: CGPoint,
+                                boardWidth: CGFloat,
+                                boardHeight: CGFloat,
+                                plotWidth: CGFloat,
+                                plotHeight: CGFloat,
+                                cellSize: CGFloat) {
     // This gesture lives on a view that is visually shifted by the axis offsets.
     // Normalize back into plot-space before converting to board coordinates.
     let normalizedLocation = CGPoint(x: location.x - axisWidth,
@@ -313,14 +313,16 @@ struct OverallView: View {
     }
     let cell = row[winningScore]
     if cell.label != "" {
-      showScoreDetails(cell: cell,
-                       winningScore: winningScore,
-                       losingScore: losingScore,
-                       cellSize: cellSize,
-                       boardWidth: boardWidth,
-                       boardHeight: boardHeight,
-                       plotWidth: plotWidth,
-                       plotHeight: plotHeight)
+      let haptic = UIImpactFeedbackGenerator(style: .light)
+      haptic.prepare()
+      haptic.impactOccurred()
+      _ = zoomToCellIfNeeded(winningScore: winningScore,
+                             losingScore: losingScore,
+                             cellSize: cellSize,
+                             boardWidth: boardWidth,
+                             boardHeight: boardHeight,
+                             plotWidth: plotWidth,
+                             plotHeight: plotHeight)
     }
   }
 
@@ -548,7 +550,6 @@ struct OverviewBoard: View {
     let showLabels = zoomScale >= 2.35
     let scaledCell = cellSize * zoomScale
     let textSize = min(14.0, max(4.5, scaledCell * 0.24))
-    let showOccurrenceLine = scaledCell >= 34.0
     let occurrenceTextSize = max(4.0, textSize * 0.72)
     let roundedCells = zoomScale >= 3.0
     let cellInset = roundedCells ? min(1.5, scaledCell * 0.08) : 0.25

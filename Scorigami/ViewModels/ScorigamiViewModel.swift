@@ -8,7 +8,7 @@
 import SwiftUI
 
 class ScorigamiViewModel: ObservableObject {
-  static let filteredOutRecencyColor = Color(white: 0.18)
+  static let filteredOutRangeColor = Color(white: 0.18)
   
   var model: Scorigami
   
@@ -24,6 +24,8 @@ class ScorigamiViewModel: ObservableObject {
     case frequency, recency
   }
   @Published var gradientType: GradientType = .frequency
+  @Published var selectedFrequencyStartCount: Int = 1
+  @Published var selectedFrequencyEndCount: Int = 1
   @Published var selectedRecencyStartYear: Int = 1920
   
   @Published var zoomView: Bool = false
@@ -56,6 +58,7 @@ class ScorigamiViewModel: ObservableObject {
     model = ScorigamiViewModel.createScorigami()
     if isNetworkAvailable() {
       model.games.sort { $0.winningScore < $1.winningScore }
+      selectedFrequencyEndCount = model.highestCounter
       selectedRecencyStartYear = model.earliestGameYear
       buildBoard()
       buildColorMap()
@@ -214,8 +217,26 @@ class ScorigamiViewModel: ObservableObject {
     gradientType == .recency && selectedRecencyStartYear > model.earliestGameYear
   }
 
+  public func isFrequencyFilterActive() -> Bool {
+    gradientType == .frequency &&
+    (selectedFrequencyStartCount > 1 || selectedFrequencyEndCount < model.highestCounter)
+  }
+
   public func updateRecencyStartYear(_ year: Int) {
     selectedRecencyStartYear = min(max(year, model.earliestGameYear), getCurrentYear())
+  }
+
+  public func updateFrequencyRange(startCount: Int, endCount: Int) {
+    let clampedStart = min(max(startCount, 1), model.highestCounter)
+    let clampedEnd = min(max(endCount, clampedStart), model.highestCounter)
+    selectedFrequencyStartCount = clampedStart
+    selectedFrequencyEndCount = clampedEnd
+  }
+
+  public func isCellWithinFrequencyRange(cell: Cell) -> Bool {
+    guard cell.occurrences > 0 else { return false }
+    return cell.occurrences >= selectedFrequencyStartCount &&
+    cell.occurrences <= selectedFrequencyEndCount
   }
 
   public func isCellVisibleForCurrentFilters(cell: Cell) -> Bool {
@@ -236,6 +257,17 @@ class ScorigamiViewModel: ObservableObject {
                          val: year,
                          skewLower: floor,
                          skewUpper: 1.0)
+  }
+
+  private func currentFrequencySaturation(for cell: Cell) -> Double {
+    let minCount = selectedFrequencyStartCount
+    let maxCount = selectedFrequencyEndCount
+    let floor = isFrequencyFilterActive() ? 0.01 : 0.0
+    return getSaturation(min: minCount,
+                         max: maxCount,
+                         val: cell.occurrences,
+                         skewLower: floor,
+                         skewUpper: 0.55)
   }
   
   public func getSaturation(min: Int,
@@ -285,7 +317,8 @@ class ScorigamiViewModel: ObservableObject {
     // used for the color map legend
     //
     if (gradientType == .frequency) {
-      return ["1", String(model.highestCounter)]
+      return [String(selectedFrequencyStartCount),
+              String(selectedFrequencyEndCount)]
     }
     else {
       return [String(selectedRecencyStartYear),
@@ -335,10 +368,13 @@ class ScorigamiViewModel: ObservableObject {
     var val: Double
     
     if gradientType == .frequency {
-      val = cell.frequencySaturation
+      if !isCellWithinFrequencyRange(cell: cell) {
+        return (ScorigamiViewModel.filteredOutRangeColor, 1.0)
+      }
+      val = currentFrequencySaturation(for: cell)
     } else {
       if !isCellVisibleForCurrentFilters(cell: cell) {
-        return (ScorigamiViewModel.filteredOutRecencyColor, 1.0)
+        return (ScorigamiViewModel.filteredOutRangeColor, 1.0)
       }
       val = currentRecencySaturation(for: cell)
     }
@@ -367,7 +403,10 @@ class ScorigamiViewModel: ObservableObject {
   public func getTextColor(cell: Cell) -> Color {
     var val: Double
     if gradientType == .frequency {
-      val = cell.frequencySaturation
+      if !isCellWithinFrequencyRange(cell: cell) {
+        return Color.white
+      }
+      val = currentFrequencySaturation(for: cell)
     } else {
       if !isCellVisibleForCurrentFilters(cell: cell) {
         return Color.white
