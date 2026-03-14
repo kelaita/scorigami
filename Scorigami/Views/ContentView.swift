@@ -16,7 +16,7 @@ private let bottomControlIconSize: CGFloat = 18
 private let rightControlWidth: CGFloat = 126
 private let rightControlTrailing: CGFloat = 14
 private let rightIconBox: CGFloat = 18
-private let legendCaptionFont: Font = .system(size: 11, weight: .regular)
+private let legendCaptionFont: Font = .system(size: 12, weight: .regular)
 private let legendBarWidth: CGFloat = 168
 
 struct ContentView: View {
@@ -196,18 +196,19 @@ struct LegendCaption: View {
     Text(captionText)
       .font(legendCaptionFont)
       .foregroundColor(.white.opacity(0.78))
-      .multilineTextAlignment(.center)
-      .frame(maxWidth: .infinity, minHeight: 14, alignment: .top)
-      .padding(.horizontal, 20)
+      .multilineTextAlignment(.leading)
+      .frame(maxWidth: .infinity, minHeight: 14, alignment: .leading)
+      .padding(.leading, 58)
+      .padding(.trailing, 20)
       .padding(.top, 2)
   }
 
   private var captionText: String {
     if viewModel.gradientType == .frequency {
-      return "Move the sliders to show only specific scores"
+      return "Move the sliders to show specific frequencies"
     }
 
-    return "Move the slider to only show scores since the first year."
+    return "Move the slider to show scores since the selected year"
   }
 }
 

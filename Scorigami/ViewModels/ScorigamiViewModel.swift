@@ -262,7 +262,7 @@ class ScorigamiViewModel: ObservableObject {
   private func currentFrequencySaturation(for cell: Cell) -> Double {
     let minCount = selectedFrequencyStartCount
     let maxCount = selectedFrequencyEndCount
-    let floor = isFrequencyFilterActive() ? 0.01 : 0.0
+    let floor = 0.01
     return getSaturation(min: minCount,
                          max: maxCount,
                          val: cell.occurrences,
