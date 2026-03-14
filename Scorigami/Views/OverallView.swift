@@ -685,9 +685,6 @@ struct OverviewBoard: View {
   private func detailText(for cell: ScorigamiViewModel.Cell) -> String? {
     guard cell.occurrences > 0 else { return nil }
     if viewModel.gradientType == .recency {
-      if viewModel.isRecencyFilterActive() {
-        return nil
-      }
       return "(\(viewModel.getMostRecentYear(gameDesc: cell.lastGame)))"
     }
     return "(\(cell.occurrences))"
