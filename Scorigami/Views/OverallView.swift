@@ -21,7 +21,7 @@ struct OverallView: View {
   @State private var pinchAnchorPoint: CGPoint = .zero
   @State private var programmaticZoomTask: Task<Void, Never>?
 
-  private let axisWidth: CGFloat = 24.0
+  private let axisWidth: CGFloat = 32.0
   private let topAxisHeight: CGFloat = 30.0
 
   var body: some View {
