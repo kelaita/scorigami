@@ -21,6 +21,7 @@ private let legendBarWidth: CGFloat = 168
 
 struct ContentView: View {
   
+  @Environment(\.scenePhase) private var scenePhase
   @StateObject var viewModel: ScorigamiViewModel  = ScorigamiViewModel()
   
   var body: some View {
@@ -40,7 +41,13 @@ struct ContentView: View {
         Spacer()
         UIOptions().environmentObject(viewModel)
       }
-    }.navigationBarTitleDisplayMode(.inline)
+    }
+    .onChange(of: scenePhase) { phase in
+      if phase == .active {
+        viewModel.handleAppDidBecomeActive()
+      }
+    }
+    .navigationBarTitleDisplayMode(.inline)
   }
 }
 
@@ -105,7 +112,7 @@ struct UIOptions: View {
             Spacer(minLength: 0)
             Button(action: {
               triggerLightHaptic()
-              viewModel.requestResetView()
+              viewModel.requestResetAndRefresh()
             }) {
               HStack(spacing: 8) {
                 Text("Reset")

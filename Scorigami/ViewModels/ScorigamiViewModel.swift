@@ -9,8 +9,11 @@ import SwiftUI
 
 class ScorigamiViewModel: ObservableObject {
   static let filteredOutRangeColor = Color(white: 0.18)
+  private static let refreshInterval: TimeInterval = 24 * 60 * 60
+  private static let lastPollDefaultsKey = "ScorigamiLastPollTimestamp"
   
   var model: Scorigami
+  private var isRefreshingData = false
   
   var uniqueId = 0
   var colorMap: [(r: Double, g: Double, b: Double)] = []
@@ -62,6 +65,7 @@ class ScorigamiViewModel: ObservableObject {
       selectedRecencyStartYear = model.earliestGameYear
       buildBoard()
       buildColorMap()
+      markPollTimestamp()
     }
   }
   
@@ -436,6 +440,41 @@ class ScorigamiViewModel: ObservableObject {
   public func requestResetView() {
     resetRequestID += 1
   }
+
+  public func requestResetAndRefresh() {
+    requestResetView()
+    refreshDataInBackground()
+  }
+
+  public func handleAppDidBecomeActive() {
+    guard !isRefreshingData else { return }
+    guard shouldAutoRefreshOnForeground() else { return }
+    requestResetAndRefresh()
+  }
+
+  public func refreshDataInBackground() {
+    guard isNetworkAvailable() else { return }
+    guard !isRefreshingData else { return }
+    isRefreshingData = true
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      var refreshed = ScorigamiViewModel.createScorigami()
+      let didLoad = !refreshed.games.isEmpty
+      if didLoad {
+        refreshed.games.sort { $0.winningScore < $1.winningScore }
+      }
+
+      DispatchQueue.main.async {
+        defer {
+          self.markPollTimestamp()
+          self.isRefreshingData = false
+        }
+
+        guard didLoad else { return }
+        self.applyRefreshedModel(refreshed)
+      }
+    }
+  }
   
   public func setGradientType(type: Int) {
     if type == 0 {
@@ -443,6 +482,47 @@ class ScorigamiViewModel: ObservableObject {
     } else {
       gradientType = .recency
     }
+  }
+
+  private func applyRefreshedModel(_ refreshed: Scorigami) {
+    objectWillChange.send()
+    let previousHighestCounter = model.highestCounter
+    let previousEarliestYear = model.earliestGameYear
+    model = refreshed
+
+    let nextFrequencyStart = min(max(selectedFrequencyStartCount, 1), model.highestCounter)
+    let nextFrequencyEnd: Int
+    if selectedFrequencyEndCount >= previousHighestCounter {
+      nextFrequencyEnd = model.highestCounter
+    } else {
+      nextFrequencyEnd = min(max(selectedFrequencyEndCount, nextFrequencyStart),
+                             model.highestCounter)
+    }
+
+    let nextRecencyStartYear: Int
+    if selectedRecencyStartYear <= previousEarliestYear {
+      nextRecencyStartYear = model.earliestGameYear
+    } else {
+      nextRecencyStartYear = min(max(selectedRecencyStartYear, model.earliestGameYear),
+                                 getCurrentYear())
+    }
+
+    selectedFrequencyStartCount = nextFrequencyStart
+    selectedFrequencyEndCount = nextFrequencyEnd
+    selectedRecencyStartYear = nextRecencyStartYear
+    buildBoard()
+    buildColorMap()
+  }
+
+  private func markPollTimestamp(date: Date = Date()) {
+    UserDefaults.standard.set(date.timeIntervalSince1970,
+                              forKey: Self.lastPollDefaultsKey)
+  }
+
+  private func shouldAutoRefreshOnForeground(now: Date = Date()) -> Bool {
+    let last = UserDefaults.standard.double(forKey: Self.lastPollDefaultsKey)
+    guard last > 0 else { return false }
+    return now.timeIntervalSince1970 - last >= Self.refreshInterval
   }
   
 }
