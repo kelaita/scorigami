@@ -17,8 +17,10 @@ struct OverallView: View {
   @State private var lastZoomScale: CGFloat = 1.0
   @State private var panOffset: CGSize = .zero
   @State private var lastPanOffset: CGSize = .zero
+  @GestureState private var isDragging = false
   @State private var isPinching = false
   @State private var pinchAnchorPoint: CGPoint = .zero
+  @State private var panAnimationID: UUID?
   @State private var programmaticZoomTask: Task<Void, Never>?
 
   private let axisWidth: CGFloat = 32.0
@@ -72,6 +74,7 @@ struct OverallView: View {
                         plotWidth: plotWidth,
                         plotHeight: plotHeight,
                         panOffset: effectiveOffset,
+                        isViewportMoving: isDragging || isPinching || panAnimationID != nil || programmaticZoomTask != nil,
                         onSelect: { cell, winningScore, losingScore in
                           showScoreDetails(cell: cell,
                                            winningScore: winningScore,
@@ -168,6 +171,9 @@ struct OverallView: View {
                            plotWidth: CGFloat,
                            plotHeight: CGFloat) -> some Gesture {
     DragGesture(minimumDistance: 3, coordinateSpace: .local)
+      .updating($isDragging) { _, isDragging, _ in
+        isDragging = true
+      }
       .onChanged { value in
         if isPinching { return }
         let candidate = CGSize(width: lastPanOffset.width + value.translation.width,
@@ -195,11 +201,35 @@ struct OverallView: View {
                                           boardHeight: boardHeight,
                                           plotWidth: plotWidth,
                                           plotHeight: plotHeight)
-        withAnimation(.interpolatingSpring(stiffness: 170, damping: 28)) {
-          panOffset = clampedTarget
-        }
+        coast(to: clampedTarget)
         lastPanOffset = panOffset
       }
+  }
+
+  private func coast(to target: CGSize) {
+    guard target != panOffset else { return }
+    let animationID = UUID()
+    panAnimationID = animationID
+    let clearAnimation = {
+      if panAnimationID == animationID {
+        panAnimationID = nil
+      }
+    }
+    let spring = Animation.interpolatingSpring(stiffness: 170, damping: 28)
+    if #available(iOS 17.0, *) {
+      withAnimation(spring, completionCriteria: .removed) {
+        panOffset = target
+      } completion: {
+        clearAnimation()
+      }
+    } else {
+      withAnimation(spring) {
+        panOffset = target
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(550)) {
+        clearAnimation()
+      }
+    }
   }
 
   private func tapGesture(boardWidth: CGFloat,
@@ -544,7 +574,13 @@ struct OverviewBoard: View {
   let plotWidth: CGFloat
   let plotHeight: CGFloat
   let panOffset: CGSize
+  let isViewportMoving: Bool
   let onSelect: (ScorigamiViewModel.Cell, Int, Int) -> Void
+
+  private enum AutoMapUpdate: Equatable {
+    case deferred
+    case ready(ClosedRange<Int>?)
+  }
 
   var body: some View {
     let showLabels = zoomScale >= 2.35
@@ -560,6 +596,11 @@ struct OverviewBoard: View {
     let endCol = min(maxWinning, Int(ceil((plotWidth - panOffset.width) / max(scaledCell, 0.001))))
     let startRow = max(0, Int(floor(-panOffset.height / max(scaledCell, 0.001))))
     let endRow = min(maxLosing, Int(ceil((plotHeight - panOffset.height) / max(scaledCell, 0.001))))
+    let autoMapUpdate: AutoMapUpdate = isViewportMoving ? .deferred : .ready(
+      viewModel.isAutoMapEnabled
+        ? visibleValueRange(scaledCell: scaledCell, inset: cellInset, maxWinning: maxWinning, maxLosing: maxLosing)
+        : nil
+    )
 
     ZStack(alignment: .topLeading) {
       Canvas { context, _ in
@@ -634,6 +675,35 @@ struct OverviewBoard: View {
     }
     .drawingGroup(opaque: true)
     .background(.black)
+    .onAppear { updateAutoMapRange(autoMapUpdate) }
+    .onChange(of: autoMapUpdate) { updateAutoMapRange($0) }
+  }
+
+  private func visibleValueRange(scaledCell: CGFloat, inset: CGFloat,
+                                 maxWinning: Int, maxLosing: Int) -> ClosedRange<Int>? {
+    guard plotWidth > 0, plotHeight > 0, scaledCell > 0 else { return nil }
+    let firstCol = max(0, Int(floor((inset - panOffset.width) / scaledCell)))
+    let lastCol = min(maxWinning + 1, Int(ceil((plotWidth - panOffset.width - inset) / scaledCell)))
+    let firstRow = max(0, Int(floor((inset - panOffset.height) / scaledCell)))
+    let lastRow = min(maxLosing + 1, Int(ceil((plotHeight - panOffset.height - inset) / scaledCell)))
+    guard firstCol < lastCol, firstRow < lastRow else { return nil }
+
+    var minimum = Int.max
+    var maximum = Int.min
+    for rowIndex in firstRow..<lastRow {
+      let row = viewModel.getGamesForLosingScore(losingScore: rowIndex)
+      for colIndex in firstCol..<lastCol {
+        guard let value = viewModel.autoMapValue(for: row[colIndex]) else { continue }
+        minimum = min(minimum, value)
+        maximum = max(maximum, value)
+      }
+    }
+    return minimum <= maximum ? minimum...maximum : nil
+  }
+
+  private func updateAutoMapRange(_ update: AutoMapUpdate) {
+    guard case .ready(let range) = update, viewModel.autoMapRange != range else { return }
+    viewModel.autoMapRange = range
   }
 
   private func resolvedFillColor(cell: ScorigamiViewModel.Cell) -> Color {
@@ -646,7 +716,7 @@ struct OverviewBoard: View {
     let sat = CGFloat(max(0.0, min(1.0, colorAndSat.1)))
     let baseUIColor = UIColor(baseColor)
 
-    if viewModel.colorMapType == .redSpecturm {
+    if viewModel.colorMapType == .redSpecturm && baseColor == .red {
       let start = UIColor(white: 0.38, alpha: 1.0)
       let end = UIColor.red
       var sr: CGFloat = 0

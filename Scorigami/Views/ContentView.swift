@@ -13,11 +13,14 @@ private let bottomControlFontWeight: Font.Weight = .semibold
 private let bottomControlFont: Font = .system(size: bottomControlFontSize,
                                               weight: bottomControlFontWeight)
 private let bottomControlIconSize: CGFloat = 18
-private let rightControlWidth: CGFloat = 126
+private let rightControlWidth: CGFloat = 94
 private let rightControlTrailing: CGFloat = 14
 private let rightIconBox: CGFloat = 18
 private let legendCaptionFont: Font = .system(size: 12, weight: .regular)
 private let legendBarWidth: CGFloat = 168
+private let legendLeadingPadding: CGFloat = 20
+private let legendMinLabelWidth: CGFloat = 46
+private let legendItemSpacing: CGFloat = 2
 
 struct ContentView: View {
   
@@ -86,7 +89,7 @@ struct UIOptions: View {
   //
   var body: some View {
     VStack(spacing: 4) {
-      Spacer().frame(height: 20)
+      Spacer().frame(height: 8)
       Text("Zoom in, then tap for score info")
         .bold()
         .foregroundColor(.white)
@@ -104,7 +107,8 @@ struct UIOptions: View {
                 .tag(Int(1))
             }.pickerStyle(.segmented)
               .colorScheme(.dark)
-              .frame(width: 200, height: 30)
+              .frame(minWidth: 0, maxWidth: 200)
+              .frame(height: 30)
               .onChange(of: refreshView) { tag in
                 triggerLightHaptic()
                 viewModel.setGradientType(type: tag)
@@ -134,9 +138,31 @@ struct UIOptions: View {
         }
       }
       Spacer().frame(height: 7)
-      GradientLegend()
-      LegendCaption()
-        .environmentObject(viewModel)
+      VStack(spacing: 2) {
+        GradientLegend()
+        HStack(alignment: .top, spacing: 8) {
+          LegendCaption()
+          Button {
+            triggerLightHaptic()
+            viewModel.isAutoMapEnabled.toggle()
+          } label: {
+            HStack(spacing: 8) {
+              Text("Auto Map")
+                .font(bottomControlFont)
+              Image(systemName: viewModel.isAutoMapEnabled ? "checkmark.square" : "square")
+                .font(.system(size: bottomControlIconSize, weight: bottomControlFontWeight))
+                .frame(width: rightIconBox, height: bottomControlIconSize, alignment: .trailing)
+            }
+            .foregroundColor(.white)
+            .fixedSize(horizontal: true, vertical: false)
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .accessibilityValue(viewModel.isAutoMapEnabled ? "On" : "Off")
+        }
+        .padding(.leading, legendLeadingPadding + legendMinLabelWidth + legendItemSpacing)
+        .padding(.trailing, rightControlTrailing)
+      }
       Spacer().frame(height: 7)
         .environmentObject(viewModel)
     }
@@ -158,41 +184,49 @@ struct GradientLegend: View {
   //
   var body: some View {
     let minMaxes = viewModel.getMinMaxes()
-    let colorSlices = 42
-    HStack (spacing: 2) {
-      Spacer().frame(width: 1, alignment: .leading)
-      Text(minMaxes[0])
-        .font(bottomControlFont)
-        .foregroundColor(.white)
-        .frame(width: 42, alignment: .trailing)
-        .lineLimit(1)
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.trailing, 4)
-        .padding(.leading, 20)
-      legendBar(colorSlices: colorSlices)
-      // add the max for the legend, then the color map type button
-      //
-      Text(minMaxes[1]).font(bottomControlFont).frame(width: 40)
-        .foregroundColor(.white)
-      Button(action: {
-        triggerLightHaptic()
-        viewModel.changeColorMapType()
-      }) {
-        HStack{
-          Text("Full Color")
-            .font(bottomControlFont)
-            .foregroundColor(.white)
-          Image(systemName: viewModel.colorMapType == .fullSpectrum ?
-                "checkmark.square": "square")
-            .font(.system(size: bottomControlIconSize, weight: bottomControlFontWeight))
-            .foregroundColor(.white)
-            .frame(width: rightIconBox, alignment: .trailing)
+    GeometryReader { geometry in
+      let maxLabelWidth: CGFloat = 40
+      let reservedWidth = legendLeadingPadding + legendMinLabelWidth + maxLabelWidth +
+        rightControlWidth + rightControlTrailing + 4 * legendItemSpacing
+      let barWidth = min(legendBarWidth, max(1, geometry.size.width - reservedWidth))
+
+      HStack(spacing: legendItemSpacing) {
+        Text(minMaxes[0])
+          .font(bottomControlFont)
+          .foregroundColor(.white)
+          .frame(width: legendMinLabelWidth - 4, alignment: .trailing)
+          .lineLimit(1)
+          .padding(.trailing, 4)
+        legendBar(colorSlices: 42, barWidth: barWidth)
+        Text(minMaxes[1])
+          .font(bottomControlFont)
+          .foregroundColor(.white)
+          .frame(width: maxLabelWidth)
+          .lineLimit(1)
+        Spacer(minLength: 0)
+        Button(action: {
+          triggerLightHaptic()
+          viewModel.changeColorMapType()
+        }) {
+          HStack {
+            Text("Full Color")
+              .font(bottomControlFont)
+              .foregroundColor(.white)
+            Image(systemName: viewModel.colorMapType == .fullSpectrum ?
+                  "checkmark.square": "square")
+              .font(.system(size: bottomControlIconSize, weight: bottomControlFontWeight))
+              .foregroundColor(.white)
+              .frame(width: rightIconBox, alignment: .trailing)
+          }
+          .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .frame(maxWidth: .infinity, alignment: .trailing)
-      }.frame(width: rightControlWidth, alignment: .trailing)
+        .frame(width: rightControlWidth, alignment: .trailing)
         .buttonStyle(.plain)
-        .padding(.trailing, rightControlTrailing)
+      }
+      .padding(.leading, legendLeadingPadding)
+      .padding(.trailing, rightControlTrailing)
     }
+    .frame(height: 30)
   }
 }
 
@@ -200,43 +234,46 @@ struct LegendCaption: View {
   @EnvironmentObject var viewModel: ScorigamiViewModel
 
   var body: some View {
-    Text(captionText)
-      .font(legendCaptionFont)
-      .foregroundColor(.white.opacity(0.78))
-      .multilineTextAlignment(.leading)
-      .frame(maxWidth: .infinity, minHeight: 14, alignment: .leading)
-      .padding(.leading, 58)
-      .padding(.trailing, 20)
-      .padding(.top, 2)
-  }
-
-  private var captionText: String {
-    if viewModel.gradientType == .frequency {
-      return "Move the sliders to show specific frequencies"
+    let captions = [
+      "Colors follow the scores in view",
+      "Move the sliders to show specific frequencies",
+      "Move the slider to show scores since the selected year"
+    ]
+    let activeCaption = viewModel.isAutoMapEnabled ? 0 : (viewModel.gradientType == .frequency ? 1 : 2)
+    ZStack(alignment: .topLeading) {
+      ForEach(captions.indices, id: \.self) { index in
+        Text(captions[index])
+          .opacity(index == activeCaption ? 1 : 0)
+          .accessibilityHidden(index != activeCaption)
+      }
     }
-
-    return "Move the slider to show scores since the selected year"
+    .font(legendCaptionFont)
+    .foregroundColor(.white.opacity(0.78))
+    .multilineTextAlignment(.leading)
+    .frame(maxWidth: .infinity, minHeight: 14, alignment: .topLeading)
   }
 }
 
 extension GradientLegend {
   @ViewBuilder
-  fileprivate func legendBar(colorSlices: Int) -> some View {
+  fileprivate func legendBar(colorSlices: Int, barWidth: CGFloat) -> some View {
     ZStack(alignment: .topLeading) {
-      if viewModel.colorMapType == .redSpecturm {
+      if viewModel.isAutoMapEnabled {
+        autoMappedLegend(barWidth: barWidth)
+      } else if viewModel.colorMapType == .redSpecturm {
         if viewModel.gradientType == .frequency {
-          frequencyFilteredLegend(totalWidth: legendBarWidth,
+          frequencyFilteredLegend(totalWidth: barWidth,
                                   colorSlices: colorSlices,
                                   useRedSpectrum: true)
         } else if viewModel.gradientType == .recency && viewModel.isRecencyFilterActive() {
-          recencyFilteredLegend(totalWidth: legendBarWidth,
+          recencyFilteredLegend(totalWidth: barWidth,
                                 colorSlices: colorSlices,
                                 useRedSpectrum: true)
         } else {
           HStack(spacing: 0) {
             ForEach(1...colorSlices, id: \.self) { box in
               Color.red
-                .frame(width: 4, height: 20)
+                .frame(width: barWidth / CGFloat(colorSlices), height: 20)
                 .padding(0)
                 .saturation(Double(box) * 2.5 / 100.0)
             }
@@ -245,29 +282,62 @@ extension GradientLegend {
         }
       } else {
         if viewModel.gradientType == .frequency {
-          frequencyFilteredLegend(totalWidth: legendBarWidth,
+          frequencyFilteredLegend(totalWidth: barWidth,
                                   colorSlices: colorSlices,
                                   useRedSpectrum: false)
         } else if viewModel.gradientType == .recency && viewModel.isRecencyFilterActive() {
-          recencyFilteredLegend(totalWidth: legendBarWidth,
+          recencyFilteredLegend(totalWidth: barWidth,
                                 colorSlices: colorSlices,
                                 useRedSpectrum: false)
         } else {
           HStack {
             let grad = Gradient(colors: [.blue, .cyan, .green, .yellow, .red])
             LinearGradient(gradient: grad, startPoint: .leading, endPoint: .trailing)
-              .frame(width: legendBarWidth, height: 20)
+              .frame(width: barWidth, height: 20)
           }
         }
       }
 
-      if viewModel.gradientType == .frequency {
-        frequencyRangeMarkers(totalWidth: legendBarWidth)
-      } else if viewModel.gradientType == .recency {
-        recencyCutoffMarker(totalWidth: legendBarWidth)
+      if !viewModel.isAutoMapEnabled {
+        if viewModel.gradientType == .frequency {
+          frequencyRangeMarkers(totalWidth: barWidth)
+        } else {
+          recencyCutoffMarker(totalWidth: barWidth)
+        }
       }
     }
-    .frame(width: legendBarWidth, height: 30, alignment: .topLeading)
+    .frame(width: barWidth, height: 30, alignment: .topLeading)
+  }
+
+  @ViewBuilder
+  private func autoMappedLegend(barWidth: CGFloat) -> some View {
+    let domainStart = viewModel.gradientType == .frequency ? 1 : viewModel.model.earliestGameYear
+    let domainEnd = viewModel.gradientType == .frequency ? viewModel.model.highestCounter : viewModel.getCurrentYear()
+    let buckets = CGFloat(max(1, domainEnd - domainStart + 1))
+    let gray = Color(white: 0.38)
+    let fullColor = viewModel.colorMapType == .fullSpectrum
+
+    ScorigamiViewModel.filteredOutRangeColor
+      .frame(width: barWidth, height: 20)
+    if let range = viewModel.autoMapRange {
+      let lower = min(1, max(0, CGFloat(range.lowerBound - domainStart) / buckets))
+      let upper = min(1, max(lower, CGFloat(range.upperBound - domainStart + 1) / buckets))
+      let colors: [Color] = fullColor ? [.blue, .cyan, .green, .yellow, .red] : [gray, .red]
+      if range.lowerBound == range.upperBound {
+        (fullColor ? Color.green : Color(red: 0.69, green: 0.19, blue: 0.19))
+          .frame(width: (upper - lower) * barWidth, height: 20)
+          .offset(x: lower * barWidth)
+      } else {
+        LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing)
+          .frame(width: (upper - lower) * barWidth, height: 20)
+          .offset(x: lower * barWidth)
+      }
+      frequencyMarker(at: lower * barWidth, totalWidth: barWidth, showsHandle: false)
+      frequencyMarker(at: upper * barWidth, totalWidth: barWidth, showsHandle: false)
+    }
+    Rectangle()
+      .strokeBorder(.white)
+      .frame(width: barWidth, height: 20)
   }
 
   @ViewBuilder
@@ -438,7 +508,7 @@ extension GradientLegend {
     )
   }
 
-  private func frequencyMarker(at x: CGFloat, totalWidth: CGFloat) -> some View {
+  private func frequencyMarker(at x: CGFloat, totalWidth: CGFloat, showsHandle: Bool = true) -> some View {
     let lineWidth: CGFloat = 2
     let knobSize: CGFloat = 8
     let lineOffsetX = min(max(x - (lineWidth / 2.0), 0), max(totalWidth - lineWidth, 0))
@@ -452,11 +522,13 @@ extension GradientLegend {
         .offset(x: lineOffsetX,
                 y: 0)
 
-      Circle()
-        .fill(.white)
-        .frame(width: knobSize, height: knobSize)
-        .offset(x: knobOffsetX,
-                y: 20)
+      if showsHandle {
+        Circle()
+          .fill(.white)
+          .frame(width: knobSize, height: knobSize)
+          .offset(x: knobOffsetX,
+                  y: 20)
+      }
     }
   }
 

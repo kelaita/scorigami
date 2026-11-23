@@ -30,6 +30,8 @@ class ScorigamiViewModel: ObservableObject {
   @Published var selectedFrequencyStartCount: Int = 1
   @Published var selectedFrequencyEndCount: Int = 1
   @Published var selectedRecencyStartYear: Int = 1920
+  @Published var isAutoMapEnabled = true
+  @Published var autoMapRange: ClosedRange<Int>?
   
   @Published var zoomView: Bool = false
   @Published var resetRequestID: Int = 0
@@ -42,8 +44,6 @@ class ScorigamiViewModel: ObservableObject {
     var lastGame: String
     var gamesUrl: String
     var label: String
-    var frequencySaturation: Double
-    var recencySaturation: Double
     var plural: String
   }
   
@@ -109,8 +109,6 @@ class ScorigamiViewModel: ObservableObject {
                     lastGame: "",
                     gamesUrl: "",
                     label: String(winningScore) + "-" + String(losingScore),
-                    frequencySaturation: 0.0,
-                    recencySaturation: 0.0,
                     plural: "s")
     
     if index != nil {
@@ -119,18 +117,6 @@ class ScorigamiViewModel: ObservableObject {
       cell.lastGame = model.games[index!].lastGame
       cell.gamesUrl = model.getParticularScoreURL(winningScore: winningScore,
                                                   losingScore: losingScore)
-      cell.frequencySaturation = getSaturation(
-        min: 1,
-        max: model.getMaxOccorrences(),
-        val: cell.occurrences,
-        skewLower: 0.01,
-        skewUpper: 0.55)
-      cell.recencySaturation = getSaturation(
-        min: model.earliestGameYear,
-        max: Calendar.current.component(.year, from: Date()),
-        val: getMostRecentYear(gameDesc: cell.lastGame),
-        skewLower: 0.0,
-        skewUpper: 1.0)
       if cell.occurrences == 1 {
         cell.plural = ""
       }
@@ -218,11 +204,11 @@ class ScorigamiViewModel: ObservableObject {
   }
 
   public func isRecencyFilterActive() -> Bool {
-    gradientType == .recency && selectedRecencyStartYear > model.earliestGameYear
+    !isAutoMapEnabled && gradientType == .recency && selectedRecencyStartYear > model.earliestGameYear
   }
 
   public func isFrequencyFilterActive() -> Bool {
-    gradientType == .frequency &&
+    !isAutoMapEnabled && gradientType == .frequency &&
     (selectedFrequencyStartCount > 1 || selectedFrequencyEndCount < model.highestCounter)
   }
 
@@ -237,68 +223,12 @@ class ScorigamiViewModel: ObservableObject {
     selectedFrequencyEndCount = clampedEnd
   }
 
-  public func isCellWithinFrequencyRange(cell: Cell) -> Bool {
-    guard cell.occurrences > 0 else { return false }
-    return cell.occurrences >= selectedFrequencyStartCount &&
-    cell.occurrences <= selectedFrequencyEndCount
-  }
-
-  public func isCellVisibleForCurrentFilters(cell: Cell) -> Bool {
-    guard cell.label != "" else { return false }
-    if gradientType == .recency && cell.occurrences > 0 {
-      return getMostRecentYear(gameDesc: cell.lastGame) >= selectedRecencyStartYear
+  private var colorRange: ClosedRange<Int>? {
+    if isAutoMapEnabled { return autoMapRange }
+    if gradientType == .frequency {
+      return selectedFrequencyStartCount...max(selectedFrequencyStartCount, selectedFrequencyEndCount)
     }
-    return cell.occurrences > 0
-  }
-
-  private func currentRecencySaturation(for cell: Cell) -> Double {
-    let minYear = selectedRecencyStartYear
-    let maxYear = getCurrentYear()
-    let year = getMostRecentYear(gameDesc: cell.lastGame)
-    let floor = isRecencyFilterActive() ? 0.01 : 0.0
-    return getSaturation(min: minYear,
-                         max: maxYear,
-                         val: year,
-                         skewLower: floor,
-                         skewUpper: 1.0)
-  }
-
-  private func currentFrequencySaturation(for cell: Cell) -> Double {
-    let minCount = selectedFrequencyStartCount
-    let maxCount = selectedFrequencyEndCount
-    let floor = 0.01
-    return getSaturation(min: minCount,
-                         max: maxCount,
-                         val: cell.occurrences,
-                         skewLower: floor,
-                         skewUpper: 0.55)
-  }
-  
-  public func getSaturation(min: Int,
-                            max: Int,
-                            val: Int,
-                            skewLower: Double,
-                            skewUpper: Double) -> Double {
-    if max <= min {
-      return val >= max ? 1.0 : 0.0
-    }
-    let floorSaturationPercent = skewLower
-    
-    // the following improves the appearance by making
-    // highest intensity before the very top
-    //
-    let newMax = Double(max - min) * skewUpper + Double(min)
-    if newMax <= Double(min) {
-      return val >= max ? 1.0 : 0.0
-    }
-    let ratio = (Double(val) - Double(min)) /
-                (newMax - Double(min))
-    let saturation = (1.0 - floorSaturationPercent) *
-    ratio + floorSaturationPercent
-    if saturation > 1.0 {
-      return 1.0
-    }
-    return saturation
+    return selectedRecencyStartYear...max(selectedRecencyStartYear, getCurrentYear())
   }
   
   public func fixScrollCell(cell: String) -> String {
@@ -318,16 +248,8 @@ class ScorigamiViewModel: ObservableObject {
   }
   
   public func getMinMaxes() -> Array<String> {
-    // used for the color map legend
-    //
-    if (gradientType == .frequency) {
-      return [String(selectedFrequencyStartCount),
-              String(selectedFrequencyEndCount)]
-    }
-    else {
-      return [String(selectedRecencyStartYear),
-              String(getCurrentYear())]
-    }
+    guard let range = colorRange else { return ["-", "-"] }
+    return [String(range.lowerBound), String(range.upperBound)]
   }
   
   public func buildColorMap() -> Void {
@@ -366,63 +288,41 @@ class ScorigamiViewModel: ObservableObject {
   }
   
   public func getColorAndSat(cell: Cell) -> (Color, Double) {
-    // return the proper color and saturation based on gradient type,
-    // full color status, and whether scorigami or not (black)
-    //
-    var val: Double
-    
-    if gradientType == .frequency {
-      if !isCellWithinFrequencyRange(cell: cell) {
-        return (ScorigamiViewModel.filteredOutRangeColor, 1.0)
-      }
-      val = currentFrequencySaturation(for: cell)
-    } else {
-      if !isCellVisibleForCurrentFilters(cell: cell) {
-        return (ScorigamiViewModel.filteredOutRangeColor, 1.0)
-      }
-      val = currentRecencySaturation(for: cell)
-    }
-    if val == 0.0 {
-      return (Color.black, 1.0)
-    }
+    guard !cell.label.isEmpty, cell.occurrences > 0 else { return (.black, 1.0) }
+    guard let val = colorPosition(for: cell) else { return (Self.filteredOutRangeColor, 1.0) }
     if colorMapType == .redSpecturm {
       return (Color.red, val)
     }
-
-    var index: Int = Int(val * 100.0)
-    
-    if index > 99 {
-      index = 99
+    if val == 0.0 {
+      return (Color(red: 0, green: 0, blue: 1), 1.0)
     }
-    if index < 0 {
-      index = 0
-    }
-    var r: Double
-    var g: Double
-    var b: Double
-    (r, g, b) = colorMap[index]
+    let (r, g, b) = colorMap[min(Int(val * 100), 99)]
     return (Color(red: r, green: g, blue: b), 1.0)
   }
   
   public func getTextColor(cell: Cell) -> Color {
-    var val: Double
-    if gradientType == .frequency {
-      if !isCellWithinFrequencyRange(cell: cell) {
-        return Color.white
-      }
-      val = currentFrequencySaturation(for: cell)
-    } else {
-      if !isCellVisibleForCurrentFilters(cell: cell) {
-        return Color.white
-      }
-      val = currentRecencySaturation(for: cell)
-    }
-    
+    guard !cell.label.isEmpty, cell.occurrences > 0,
+          let val = colorPosition(for: cell) else { return .white }
     if val < 0.2 || val > 0.8 ||
         colorMapType == .redSpecturm {
       return Color.white
     }
     return Color.black
+  }
+
+  func autoMapValue(for cell: Cell) -> Int? {
+    guard !cell.label.isEmpty, cell.occurrences > 0 else { return nil }
+    if gradientType == .frequency { return cell.occurrences }
+    return Int(cell.lastGame.suffix(4))
+  }
+
+  private func colorPosition(for cell: Cell) -> Double? {
+    guard let range = colorRange else { return 0.5 }
+    let value = autoMapValue(for: cell) ?? model.earliestGameYear
+    if !isAutoMapEnabled && !range.contains(value) { return nil }
+    if range.lowerBound == range.upperBound { return 0.5 }
+    let fraction = Double(value - range.lowerBound) / Double(range.upperBound - range.lowerBound)
+    return min(1, max(0, fraction))
   }
   
   public func changeColorMapType() {
